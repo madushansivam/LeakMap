@@ -158,6 +158,15 @@
     }
     @keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
+    /* Connection status indicator */
+    .connection-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--muted); font-family: var(--font-mono);
+      padding: 6px 0 0;
+    }
+    .connection-status.offline { color: var(--danger); }
+    .connection-status.offline .live-dot { background: var(--danger); animation: none; }
+
     /* ════════════════ MAIN + TOPBAR ════════════════ */
     #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
@@ -357,7 +366,7 @@
     textarea.form-control { resize: vertical; min-height: 80px; }
     select.form-control { cursor: pointer; }
 
-    /* Type selector grid (from v1) */
+    /* Type selector grid */
     .type-grid {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
     }
@@ -667,7 +676,8 @@
       font-size: 10px; font-weight: 700; color: var(--accent-bright);
       text-decoration: none; padding: 3px 8px;
       border: 1px solid rgba(10,126,164,0.3); border-radius: 20px;
-      transition: all var(--transition); white-space: nowrap;
+      transition: all var(--transition); white-space: nowrap; cursor: pointer;
+      background: none;
     }
     .btn-view-map:hover { background: var(--accent-glow); border-color: var(--accent); }
 
@@ -768,6 +778,17 @@
     @keyframes loaderSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(240%); } }
     .loader-status { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
+    /* ════════════════ OFFLINE BANNER ════════════════ */
+    #offline-banner {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 8000;
+      background: rgba(230,57,70,0.95); color: #fff;
+      font-size: 12px; font-weight: 700; text-align: center;
+      padding: 6px 16px; font-family: var(--font-mono);
+      backdrop-filter: blur(8px);
+    }
+    #offline-banner.visible { display: block; }
+
     /* ════════════════ MOBILE BOTTOM NAV ════════════════ */
     #bottom-nav {
       display: none;
@@ -824,12 +845,70 @@
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+    /* ─── FIX 2: Post-submit modal ─── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px); z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius-lg); padding: 32px; max-width: 440px;
+      width: 90%; box-shadow: var(--shadow-lg);
+    }
+    .modal-box h3 { font-size: 16px; margin-bottom: 16px; color: var(--text); }
+    .modal-box p { font-size: 13px; color: var(--subtle); line-height: 1.7; margin-bottom: 10px; }
+    .modal-box .modal-step { padding-left: 12px; border-left: 2px solid var(--accent); margin-bottom: 12px; }
+    .modal-box button { margin-top: 16px; width: 100%; }
+
+    /* ─── FIX 4: How It Works banner ─── */
+    .hiw-banner {
+      position: absolute; top: 54px; left: 12px; right: 12px; z-index: 800;
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+      border: 1px solid var(--border2); border-radius: var(--radius-lg);
+      padding: 16px 20px; box-shadow: var(--shadow);
+      animation: fadeSlideIn 0.4s ease;
+    }
+    .hiw-banner.dismissed { display: none; }
+    .hiw-banner-title {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .hiw-banner-title button {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 16px; padding: 2px 6px; border-radius: 4px;
+    }
+    .hiw-banner-title button:hover { color: var(--text); background: var(--surface3); }
+    .hiw-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .hiw-step { text-align: center; font-size: 11px; color: var(--subtle); line-height: 1.5; }
+    .hiw-step-icon { font-size: 22px; margin-bottom: 4px; }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 600px) {
+      .hiw-steps { grid-template-columns: 1fr 1fr; }
+      .hiw-banner { top: 52px; left: 6px; right: 6px; }
+    }
+
+    /* ─── FIX 3: Impact estimate on EcoScore cards ─── */
+    .nb-impact-est {
+      font-size: 11px; color: var(--warning); margin-top: 6px;
+      padding: 4px 8px; background: rgba(244,162,97,0.08);
+      border-radius: 6px; border-left: 2px solid var(--warning);
+    }
   </style>
 </head>
 <body>
 
 <!-- GLOBAL TOOLTIP -->
 <div id="global-tip"></div>
+
+<!-- OFFLINE BANNER [FIX M-3] -->
+<div id="offline-banner">⚠ Connection lost — data may be stale. Attempting to reconnect…</div>
 
 <!-- LOADING OVERLAY -->
 <div id="loading-overlay">
@@ -893,8 +972,11 @@
     <div class="sidebar-spacer"></div>
 
     <div class="sidebar-footer">
-      <p><span class="live-dot"></span>Live · Real-time sync</p>
-      <p style="margin-top:4px;">EcoHack 2026 · LeakMap v3</p>
+      <div class="connection-status" id="connection-indicator">
+        <span class="live-dot"></span>
+        <span id="connection-text">Live · Real-time sync</span>
+      </div>
+      <p style="margin-top:4px;font-size:11px;line-height:1.5;">Built for EcoHack 2026<br/><strong style="color:var(--accent-bright);">SDG 6</strong>: Clean Water &amp; Sanitation</p>
     </div>
   </nav>
 
@@ -939,6 +1021,20 @@
           </div>
         </div>
 
+        <!-- How It Works banner [FIX 4] -->
+        <div id="how-it-works" class="hiw-banner">
+          <div class="hiw-banner-title">
+            <span>🧭 How LeakMap Works</span>
+            <button id="hiw-dismiss" aria-label="Dismiss">✕</button>
+          </div>
+          <div class="hiw-steps">
+            <div class="hiw-step"><div class="hiw-step-icon">📱</div>Citizen spots issue → taps <strong>Report</strong></div>
+            <div class="hiw-step"><div class="hiw-step-icon">📍</div>Report geo-tagged + severity scored → appears on <strong>live map</strong></div>
+            <div class="hiw-step"><div class="hiw-step-icon">📤</div>Local authority exports CSV or receives webhook → dispatches crew</div>
+            <div class="hiw-step"><div class="hiw-step-icon">✅</div>Issue marked <strong>Resolved</strong> → EcoScore updates</div>
+          </div>
+        </div>
+
         <!-- Stats panel -->
         <div id="stats-panel">
           <div class="stats-icon">📊</div>
@@ -948,7 +1044,7 @@
             <div class="stat-row"><span class="stat-label">🔥 Hotspots</span><span class="stat-value" id="stat-hotspots">0</span></div>
             <div class="stat-row"><span class="stat-label">✅ Fixed/7d</span><span class="stat-value" id="stat-resolved">0</span></div>
             <div class="stat-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;">
-              <span class="stat-label">💧 Saved</span>
+              <span class="stat-label" data-tip="WHO/UNICEF JMP estimates 5–20 L/min loss for burst mains; figures are conservative lower bounds.">💧 Saved*</span>
               <span class="stat-value sm" id="stat-saved">0 L</span>
             </div>
           </div>
@@ -1075,7 +1171,7 @@
             <div class="kpi-icon">💧</div>
             <div class="kpi-label">Est. Water Saved</div>
             <div class="kpi-value sm-val" id="kpi-saved">—</div>
-            <div class="kpi-delta">From resolved reports</div>
+            <div class="kpi-delta" data-tip="WHO/UNICEF JMP estimates 5–20 L/min loss for burst mains; figures are conservative lower bounds.">Est. · WHO leak-loss benchmarks</div>
           </div>
         </div>
 
@@ -1266,6 +1362,7 @@
             <div class="formula-title">Score Formula</div>
             <div class="formula">EcoScore = 100 − (openReports × 3) − (hotspots × 8) − (avgResolutionDays × 1) + (resolvedThisMonth × 2)  ·  clamped 0–100</div>
           </div>
+          <p style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border-left:2px solid var(--accent);">📋 <strong style="color:var(--subtle);">Production roadmap:</strong> In production, this score would integrate with NWSDB's complaint ticketing API and update daily. The current prototype computes scores client-side from community reports, demonstrating the algorithm's viability before institutional integration.</p>
         </div>
 
         <div class="legend-card-grid" style="margin-bottom:20px;">
@@ -1311,6 +1408,20 @@
 
 <div id="toast-container"></div>
 
+<!-- Post-submit modal [FIX 2] -->
+<div class="modal-overlay" id="post-submit-modal">
+  <div class="modal-box">
+    <h3>✅ Your report has been logged.</h3>
+    <div class="modal-step">
+      <p>In a real deployment, this would automatically notify the nearest <strong>NWSDB</strong> (National Water Supply &amp; Drainage Board) field office via SMS/email.</p>
+    </div>
+    <div class="modal-step">
+      <p>For this prototype, you can <strong>export all reports as CSV</strong> and forward them to your local authority.</p>
+    </div>
+    <button class="btn btn-primary" id="modal-close-btn">Got it</button>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════
      FIREBASE v10 — paste your config below
 ══════════════════════════════════════════════════════ -->
@@ -1318,7 +1429,8 @@
 import { initializeApp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, doc, addDoc, updateDoc,
-         onSnapshot, query, orderBy, serverTimestamp, getDocs }
+         onSnapshot, query, orderBy, serverTimestamp, getDocs,
+         writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -1343,6 +1455,7 @@ const TYPE_COLORS = {
 const SEV_COLORS    = { Low:"#64748B", Medium:"#F4A261", High:"#E63946", Critical:"#DC2626" };
 const SEV_WEIGHT    = { Low:1, Medium:2, High:3, Critical:5 };
 const SEV_LABELS    = ["Low","Medium","High","Critical"];
+/* WHO/UNICEF JMP conservative lower-bound estimates (litres saved per resolved report) */
 const WATER_SAVED_L = { "Water Leak":5000, "Dry Tap":1000, "Pollution":2000, "Illegal Dumping":500, "Overflow":3000, "Contamination":2000, "Other":500 };
 const URGENCY_TIP   = "Urgency = Severity weight × nearby-report density. Max 12.";
 const NEIGHBORHOODS = [
@@ -1352,6 +1465,11 @@ const NEIGHBORHOODS = [
   { id:"wattala",       name:"Wattala",       bounds:{ n:7.01, s:6.98, e:79.90, w:79.85 } },
   { id:"ja_ela",        name:"Ja-Ela",        bounds:{ n:7.08, s:7.02, e:79.90, w:79.86 } }
 ];
+
+/* Maximum allowed file size for photo uploads: 10 MB [FIX C-4] */
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+/* Allowed MIME prefixes [FIX C-4] */
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 /* ─── INIT ─── */
 let db = null, storage = null;
@@ -1411,15 +1529,91 @@ let pinMarker    = null;
 let photoFile    = null;
 let selectedType = null;
 let heatLayer    = null, heatmapOn = false;
-let chartType=null, chartTrend=null, chartSeverity=null;
-let chartResolution=null, chartAvgUrgency=null, chartHourly=null;
-let chartEcoScore=null, chartAreaBar=null;
+let chartType = null, chartTrend = null, chartSeverity = null;
+let chartResolution = null, chartAvgUrgency = null, chartHourly = null;
+let chartEcoScore = null, chartAreaBar = null;
+let isOnline = true;            // [FIX M-3] connection state
+let snapshotUnsubscribe = null; // [FIX M-3] for reconnection
+
+/* ─── HELPERS (defined early so everything below can use them) ─── */
+function esc(str) {
+  return String(str ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function lower(s) { return s.toLowerCase(); }
+function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+function formatTimeAgo(date) {
+  if (!date) return "—";
+  const s = (Date.now() - date.getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s/86400)}d ago`;
+  return date.toLocaleDateString("en-US", { month:"short", day:"numeric" });
+}
+
+function distMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000, p1 = lat1*Math.PI/180, p2 = lat2*Math.PI/180;
+  const dp = (lat2-lat1)*Math.PI/180, dl = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function calcWaterSaved() {
+  return allReports.filter(r => r.status === "Resolved")
+    .reduce((t, r) => t + (WATER_SAVED_L[r.type] || 500), 0);
+}
+
+function fmtWater(l) {
+  if (l >= 1e6) return `${(l/1e6).toFixed(1)} ML`;
+  if (l >= 1000) return `${(l/1000).toFixed(1)} kL`;
+  return `${l.toLocaleString()} L`;
+}
+
+/* [FIX H-4] Debounce utility */
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+function hideLoader() {
+  setTimeout(() => document.getElementById("loading-overlay")?.classList.add("hidden"), 600);
+}
+
+function showToast(msg, type = "info") {
+  const c = document.getElementById("toast-container");
+  const icons = { success:"✅", error:"❌", info:"ℹ️", warning:"⚠️" };
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icons[type]||"ℹ️"}</span><span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add("exiting"); setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+/* [FIX M-3] Connection state management */
+function setOnline(online) {
+  isOnline = online;
+  const banner = document.getElementById("offline-banner");
+  const indicator = document.getElementById("connection-indicator");
+  const connText = document.getElementById("connection-text");
+  if (online) {
+    banner.classList.remove("visible");
+    indicator.classList.remove("offline");
+    connText.textContent = "Live · Real-time sync";
+  } else {
+    banner.classList.add("visible");
+    indicator.classList.add("offline");
+    connText.textContent = "Offline · Data may be stale";
+  }
+}
 
 /* ─── DEMO DATA ─── */
 function generateDemoData() {
   const types  = ["Water Leak","Pollution","Dry Tap","Illegal Dumping","Overflow","Contamination","Other"];
   const sevs   = ["Low","Medium","High","Critical"];
-  const stats  = ["Open","In Progress","Resolved"];
   const names  = ["Kasun P.","Dilani S.","Anonymous","Raj M.","Sandya K.","Thilini W."];
   const descs  = [
     "Pipe burst near market — wasting heavily","Chemical runoff into canal",
@@ -1432,68 +1626,185 @@ function generateDemoData() {
     const ts     = new Date(now - Math.random()*14*86400000);
     const type   = types[Math.floor(Math.random()*types.length)];
     const sev    = sevs[Math.floor(Math.random()*sevs.length)];
-    const status = Math.random()<0.35?"Resolved":Math.random()<0.2?"In Progress":"Open";
+    const status = Math.random()<0.35 ? "Resolved" : Math.random()<0.2 ? "In Progress" : "Open";
     reports.push({
       id:`demo_${i}`, type, severity:sev,
-      description:descs[Math.floor(Math.random()*descs.length)],
-      lat:7.0+Math.random()*0.8, lng:79.83+Math.random()*0.15,
-      status, urgencyScore:Math.floor(Math.random()*10)+2,
-      reporter:names[Math.floor(Math.random()*names.length)],
-      timestamp:{ toDate:()=>ts, seconds:ts.getTime()/1000 },
-      photoURL:null
+      description: descs[Math.floor(Math.random()*descs.length)],
+      lat: 7.0 + Math.random()*0.8,
+      lng: 79.83 + Math.random()*0.15,
+      status, urgencyScore: Math.floor(Math.random()*10)+2,
+      reporter: names[Math.floor(Math.random()*names.length)],
+      timestamp: { toDate:()=>ts, seconds:ts.getTime()/1000 },
+      photoURL: null
     });
   }
-  return reports.sort((a,b)=>b.timestamp.seconds-a.timestamp.seconds);
+  return reports.sort((a,b) => b.timestamp.seconds - a.timestamp.seconds);
 }
 
-/* ─── BOOT ─── */
+/* ─── BOOT [FIX H-6: wait for first snapshot before hiding loader] ─── */
 (function boot() {
   if (!isConfigured) {
     document.getElementById("loader-status").textContent = "Demo mode — Firebase not configured";
     setTimeout(() => {
       hideLoader();
-      showToast("Running in demo mode. Add Firebase config to go live.", "info");
       allReports = generateDemoData();
       renderAll();
-    }, 800);
+      showToast("Demo mode — 48 sample reports loaded. Explore all views!", "info");
+    }, 300);
     return;
   }
   document.getElementById("loader-status").textContent = "Loading reports…";
   startListener();
-  hideLoader();
+  /* [FIX H-6] loader is hidden inside the first onSnapshot callback now, not here */
 })();
 
-/* ─── REAL-TIME LISTENER ─── */
+/* ─── REAL-TIME LISTENER [FIX M-3: reconnection + first-load sync] ─── */
+let isFirstSnapshot = true;
+let reconnectTimer = null;
+
 function startListener() {
-  const q = query(collection(db,"reports"), orderBy("timestamp","desc"));
-  onSnapshot(q, snap => {
+  if (snapshotUnsubscribe) { snapshotUnsubscribe(); snapshotUnsubscribe = null; }
+  isFirstSnapshot = true;
+
+  const q = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+  snapshotUnsubscribe = onSnapshot(q, snap => {
+    setOnline(true);
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
     allReports = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     renderAll();
+
+    /* [FIX H-6] Hide loader only after first data arrives */
+    if (isFirstSnapshot) {
+      isFirstSnapshot = false;
+      hideLoader();
+    }
   }, err => {
-    showToast("Snapshot error: "+err.message, "error");
+    console.error("Snapshot error:", err);
+    setOnline(false);
+    showToast("Connection lost. Retrying…", "warning");
+
+    /* [FIX H-6] If we never got data, still hide loader after a timeout */
+    if (isFirstSnapshot) {
+      isFirstSnapshot = false;
+      hideLoader();
+    }
+
+    /* [FIX M-3] Auto-retry with exponential backoff */
+    if (!reconnectTimer) {
+      let delay = 3000;
+      const attempt = () => {
+        reconnectTimer = setTimeout(() => {
+          try { startListener(); }
+          catch (_) {
+            delay = Math.min(delay * 2, 30000);
+            attempt();
+          }
+        }, delay);
+      };
+      attempt();
+    }
   });
 }
 
-/* ─── RENDER ALL ─── */
-function renderAll() {
-  updateMarkers();
-  updateMapStats();
-  updateKPIs();
-  updateNavBadges();
-  updateFilterPillCounts();
-  updateChartType();
-  updateChartTrend();
-  updateChartSeverity();
-  renderMiniTable();
-  renderActivityFeed();
-  updateTopbarSub();
-  if (heatmapOn) updateHeatmap();
-  if (activeView === "reports")  renderFullTable();
-  if (activeView === "hotspots") renderHotspots();
-  if (activeView === "ecoscore") renderEcoScore();
+/* ─── EXPENSIVE COMPUTATION: HOTSPOT CLUSTERS [FIX H-2: computed once per render] ─── */
+function computeHotspotClusters(reports) {
+  const visited = new Set(), clusters = [];
+  for (let i = 0; i < reports.length; i++) {
+    if (visited.has(i)) continue;
+    const group = [i]; visited.add(i);
+    for (let j = i+1; j < reports.length; j++) {
+      if (visited.has(j)) continue;
+      if (distMeters(reports[i].lat, reports[i].lng, reports[j].lat, reports[j].lng) <= 500) {
+        group.push(j); visited.add(j);
+      }
+    }
+    if (group.length >= 3) {
+      const members = group.map(idx => reports[idx]);
+      clusters.push({
+        count: members.length,
+        center: {
+          lat: members.reduce((s,r) => s+r.lat, 0) / members.length,
+          lng: members.reduce((s,r) => s+r.lng, 0) / members.length
+        },
+        types: [...new Set(members.map(r => r.type))]
+      });
+    }
+  }
+  return clusters.sort((a,b) => b.count - a.count);
 }
 
-/* ─── MARKERS ─── */
+/* ─── NEIGHBORHOOD ECOSCORE [FIX H-3: accepts pre-computed hotspots] ─── */
+function computeAllNeighborhoods(hotspots) {
+  return NEIGHBORHOODS.map(hood => {
+    const { n, s, e, w } = hood.bounds;
+    const reps = allReports.filter(r => r.lat <= n && r.lat >= s && r.lng <= e && r.lng >= w);
+    const openR = reps.filter(r => r.status !== "Resolved");
+    const resolvedR = reps.filter(r => r.status === "Resolved");
+    const hoodHs = hotspots.filter(h => h.center.lat <= n && h.center.lat >= s && h.center.lng <= e && h.center.lng >= w);
+    const resolvedWithTime = resolvedR.filter(r => r.timestamp?.toDate);
+    const avgRes = resolvedWithTime.length
+      ? resolvedWithTime.reduce((s,r) => { const ms = Date.now()-r.timestamp.toDate().getTime(); return s+ms/86400000; }, 0) / resolvedWithTime.length
+      : 0;
+    const now = new Date();
+    const resolvedThisMonth = resolvedR.filter(r => {
+      const d = r.timestamp?.toDate?.();
+      return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length;
+    const ecoScore = Math.max(0, Math.min(100, Math.round(
+      100 - (openR.length*3) - (hoodHs.length*8) - (Math.round(avgRes)*1) + (resolvedThisMonth*2)
+    )));
+    const grade = ecoScore >= 80 ? {label:"Healthy", css:"grade-healthy"}
+                : ecoScore >= 60 ? {label:"Moderate", css:"grade-moderate"}
+                : ecoScore >= 40 ? {label:"At Risk", css:"grade-risk"}
+                                 : {label:"Critical", css:"grade-critical"};
+    const openLeaks = openR.filter(r => r.type === "Water Leak" || r.type === "Overflow").length;
+    return {
+      ...hood, ecoScore, grade:grade.label, gradeCss:grade.css,
+      openReports: openR.length, resolvedReports: resolvedR.length,
+      totalReports: reps.length, hotspotCount: hoodHs.length,
+      avgResolutionDays: Math.round(avgRes*10)/10,
+      openLeaks
+    };
+  }).filter(Boolean).sort((a,b) => a.ecoScore - b.ecoScore);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER ALL [FIX H-1/H-2/H-3: memoize expensive computations]
+═══════════════════════════════════════════════════════════ */
+function renderAll() {
+  try {
+    /* Compute once, share everywhere — kills 3+ redundant O(n²) passes */
+    const openReports      = allReports.filter(r => r.status !== "Resolved");
+    const _hotspotClusters = computeHotspotClusters(openReports);
+    const _neighborhoods   = computeAllNeighborhoods(_hotspotClusters);
+
+    updateMarkers();
+    updateMapStats(_hotspotClusters);
+    updateKPIs(_hotspotClusters);
+    updateNavBadges(_hotspotClusters, _neighborhoods);
+    updateFilterPillCounts();
+    updateChartType();
+    updateChartTrend();
+    updateChartSeverity();
+    renderMiniTable();
+    renderActivityFeed();
+    updateTopbarSub();
+    if (heatmapOn) updateHeatmap();
+    if (activeView === "reports")  renderFullTable();
+    if (activeView === "hotspots") renderHotspots(_hotspotClusters);
+    if (activeView === "ecoscore") renderEcoScore(_neighborhoods);
+  } catch (e) {
+    /* [FIX L-3] Catch-all prevents silent partial renders */
+    console.error("renderAll failed:", e);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MARKERS
+═══════════════════════════════════════════════════════════ */
 function updateMarkers() {
   clusterGroup.clearLayers();
   markerMap = {};
@@ -1511,26 +1822,35 @@ function addMarker(r) {
   const opacity = r.status === "Resolved" ? 0.4 : 0.9;
   const m = L.circleMarker([r.lat, r.lng], {
     radius: r.status === "Resolved" ? 7 : 9,
-    fillColor: color, color:"#fff",
+    fillColor: color, color: "#fff",
     weight: r.status === "Resolved" ? 1 : 2,
     opacity, fillOpacity: opacity
   });
+  /* [FIX C-5] Store report ID as marker property for event delegation */
+  m._reportId = r.id;
   m.bindPopup(buildPopupHTML(r), { maxWidth:300, className:"lm-popup" });
   clusterGroup.addLayer(m);
   markerMap[r.id] = m;
 }
 
 function buildPopupHTML(r) {
-  const color      = TYPE_COLORS[r.type] || "#6B7280";
-  const sevCls     = `badge-${(r.severity||"low").toLowerCase()}`;
-  const statusCls  = `badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
-  const timeAgo    = formatTimeAgo(r.timestamp?.toDate?.() || new Date());
-  const photoHTML  = r.photoURL ? `<img class="popup-photo" src="${esc(r.photoURL)}" alt="" />` : "";
-  const actionBtn  = r.status !== "Resolved"
-    ? `<button class="btn-resolve" onclick="window._resolveReport('${r.id}')">✓ Mark Resolved</button>`
-    : `<span class="badge badge-resolved">✅ Resolved</span>`;
+  const color     = TYPE_COLORS[r.type] || "#6B7280";
+  const sevCls    = `badge-${(r.severity||"low").toLowerCase()}`;
+  const statusCls = `badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+  const timeAgo   = formatTimeAgo(r.timestamp?.toDate?.() || new Date());
+  const photoHTML = r.photoURL ? `<img class="popup-photo" src="${esc(r.photoURL)}" alt="" />` : "";
   const days = r.timestamp?.toDate ? Math.floor((Date.now()-r.timestamp.toDate().getTime())/86400000) : 0;
-  const shameMsg = days >= 14 ? `🔴 ${days}d — UNACCEPTABLE` : days >= 7 ? `🟠 ${days}d — WHY?` : days >= 3 ? `🟡 ${days}d open` : days >= 1 ? `${days}d open` : "NEW";
+  const shameMsg = days >= 14 ? `🔴 ${days}d — UNACCEPTABLE`
+                 : days >= 7  ? `🟠 ${days}d — WHY?`
+                 : days >= 3  ? `🟡 ${days}d open`
+                 : days >= 1  ? `${days}d open`
+                              : "NEW";
+
+  /* [FIX C-2/C-5] Use data-attributes + event delegation instead of inline onclick */
+  const actionBtn = r.status !== "Resolved"
+    ? `<button class="btn-resolve" data-action="resolve" data-id="${esc(r.id)}">✓ Mark Resolved</button>`
+    : `<span class="badge badge-resolved">✅ Resolved</span>`;
+
   return `<div class="popup-inner">
     ${photoHTML}
     <div class="popup-body">
@@ -1553,43 +1873,48 @@ function buildPopupHTML(r) {
       </div>
       <div class="popup-actions">
         ${actionBtn}
-        <button class="btn-close-popup" onclick="window._closePopup()">✕</button>
+        <button class="btn-close-popup" data-action="close-popup">✕</button>
       </div>
     </div>
   </div>`;
 }
 
-window._resolveReport = async (id) => {
-  if (!db) {
-    const r = allReports.find(x=>x.id===id);
-    if (r) { r.status="Resolved"; renderAll(); showToast("Marked resolved (demo).", "success"); }
+/* [FIX C-2] Event delegation for popup actions — replaces window._resolveReport / _closePopup */
+document.addEventListener("click", e => {
+  const resolveBtn = e.target.closest("[data-action='resolve']");
+  if (resolveBtn) {
+    const id = resolveBtn.dataset.id;
+    if (id) { updateStatus(id, "Resolved", "Report Resolved.").then(() => map.closePopup()); }
     return;
   }
-  try {
-    await updateDoc(doc(db,"reports",id), { status:"Resolved", resolvedAt:serverTimestamp() });
-    showToast("Report marked as Resolved.", "success"); map.closePopup();
-  } catch(e) { showToast("Failed: "+e.message, "error"); }
-};
-window._closePopup = () => map.closePopup();
+  const closeBtn = e.target.closest("[data-action='close-popup']");
+  if (closeBtn) { map.closePopup(); return; }
+});
+
 
 /* ─── HEATMAP ─── */
 document.getElementById("heatmap-toggle-btn").addEventListener("click", () => {
   heatmapOn = !heatmapOn;
   document.getElementById("heatmap-toggle-btn").classList.toggle("active", heatmapOn);
   if (heatmapOn) updateHeatmap();
-  else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer=null; } }
+  else { cleanupHeatmap(); }
 });
+
+/* [FIX M-2] Centralized heatmap cleanup */
+function cleanupHeatmap() {
+  if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+}
 
 function updateHeatmap() {
   if (!heatmapOn) return;
-  if (heatLayer) map.removeLayer(heatLayer);
+  cleanupHeatmap();
   const pts = allReports
     .filter(r => r.lat && r.lng && (showResolved || r.status !== "Resolved"))
-    .map(r => [r.lat, r.lng, Math.min((r.urgencyScore||1)/12,1.0)]);
+    .map(r => [r.lat, r.lng, Math.min((r.urgencyScore||1)/12, 1.0)]);
   if (typeof L.heatLayer === "function") {
     heatLayer = L.heatLayer(pts, {
-      radius:30, blur:20, maxZoom:17,
-      gradient:{0.2:"#0A7EA4", 0.5:"#F4A261", 0.8:"#E63946", 1.0:"#DC2626"}
+      radius: 30, blur: 20, maxZoom: 17,
+      gradient: { 0.2:"#0A7EA4", 0.5:"#F4A261", 0.8:"#E63946", 1.0:"#DC2626" }
     }).addTo(map);
   } else {
     showToast("Heatmap plugin not ready. Try again.", "error");
@@ -1597,6 +1922,7 @@ function updateHeatmap() {
     document.getElementById("heatmap-toggle-btn").classList.remove("active");
   }
 }
+
 
 /* ─── FILTER PILLS ─── */
 document.getElementById("filter-bar").addEventListener("click", e => {
@@ -1624,163 +1950,238 @@ function updateFilterPillCounts() {
     if (!showResolved && r.status === "Resolved") return;
     tc[r.type] = (tc[r.type]||0)+1;
   });
-  const total = allReports.filter(r => showResolved||r.status!=="Resolved").length;
-  const idMap = { "all":"pc-all","Water Leak":"pc-leak","Pollution":"pc-poll","Dry Tap":"pc-dry","Illegal Dumping":"pc-dump","Overflow":"pc-overflow","Contamination":"pc-contam","Other":"pc-other" };
-  const valMap = { "all":total,...tc };
-  Object.entries(idMap).forEach(([k,elId]) => { const el=document.getElementById(elId); if(el) el.textContent=valMap[k]||0; });
+  const total = allReports.filter(r => showResolved || r.status !== "Resolved").length;
+  const idMap = {
+    "all":"pc-all","Water Leak":"pc-leak","Pollution":"pc-poll","Dry Tap":"pc-dry",
+    "Illegal Dumping":"pc-dump","Overflow":"pc-overflow","Contamination":"pc-contam","Other":"pc-other"
+  };
+  const valMap = { "all":total, ...tc };
+  Object.entries(idMap).forEach(([k, elId]) => {
+    const el = document.getElementById(elId); if (el) el.textContent = valMap[k] || 0;
+  });
 }
+
 
 /* ─── STATS PANEL COLLAPSE ─── */
 document.getElementById("stats-panel").addEventListener("click", e => {
   const sp = document.getElementById("stats-panel");
-  if (window.innerWidth<=600||sp.classList.contains("collapsed")) sp.classList.toggle("collapsed");
+  if (window.innerWidth <= 600 || sp.classList.contains("collapsed")) sp.classList.toggle("collapsed");
 });
 
-function updateMapStats() {
-  const now=new Date(), weekAgo=new Date(now-7*86400000);
-  const active   = allReports.filter(r=>r.status!=="Resolved");
-  const resolved = allReports.filter(r=>r.status==="Resolved" && r.timestamp?.toDate?.()>=weekAgo);
+/* [FIX H-1] Accept pre-computed hotspot clusters */
+function updateMapStats(_hotspotClusters) {
+  const now = new Date(), weekAgo = new Date(now-7*86400000);
+  const active   = allReports.filter(r => r.status !== "Resolved");
+  const resolved = allReports.filter(r => r.status === "Resolved" && r.timestamp?.toDate?.() >= weekAgo);
   animateStat("stat-total", active.length);
-  animateStat("stat-hotspots", computeHotspotClusters(active).length);
+  animateStat("stat-hotspots", _hotspotClusters.length);
   animateStat("stat-resolved", resolved.length);
-  const savedEl=document.getElementById("stat-saved"); if(savedEl) savedEl.textContent=fmtWater(calcWaterSaved());
+  const savedEl = document.getElementById("stat-saved");
+  if (savedEl) savedEl.textContent = fmtWater(calcWaterSaved());
 }
 
 function animateStat(id, val) {
-  const el=document.getElementById(id); if(!el) return;
-  if(parseInt(el.textContent)!==val) { el.textContent=val; el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); }
+  const el = document.getElementById(id); if (!el) return;
+  if (parseInt(el.textContent) !== val) {
+    el.textContent = val;
+    el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse");
+  }
 }
 
-/* ─── KPIs ─── */
-function updateKPIs() {
-  const open    = allReports.filter(r=>r.status!=="Resolved").length;
-  const crit    = allReports.filter(r=>r.severity==="Critical"&&r.status!=="Resolved").length;
-  const now=new Date(), weekAgo=new Date(now-7*86400000);
-  const res7d   = allReports.filter(r=>r.status==="Resolved"&&r.timestamp?.toDate?.()>=weekAgo).length;
-  const hs      = computeHotspotClusters(allReports.filter(r=>r.status!=="Resolved")).length;
+
+/* ─── KPIs [FIX H-1] Accept pre-computed clusters ─── */
+function updateKPIs(_hotspotClusters) {
+  const open  = allReports.filter(r => r.status !== "Resolved").length;
+  const crit  = allReports.filter(r => r.severity === "Critical" && r.status !== "Resolved").length;
+  const now   = new Date(), weekAgo = new Date(now-7*86400000);
+  const res7d = allReports.filter(r => r.status === "Resolved" && r.timestamp?.toDate?.() >= weekAgo).length;
   setText("kpi-total",    allReports.length);
   setText("kpi-open",     open);
   setText("kpi-critical", crit);
   setText("kpi-resolved", res7d);
-  setText("kpi-hotspots", hs);
+  setText("kpi-hotspots", _hotspotClusters.length);
   setText("kpi-saved",    fmtWater(calcWaterSaved()));
 }
 
-function updateNavBadges() {
+/* [FIX H-3] updateNavBadges accepts pre-computed data — no double computation */
+function updateNavBadges(_hotspotClusters, _neighborhoods) {
   setText("nav-badge-reports",    allReports.length);
-  setText("nav-badge-hotspots",   computeHotspotClusters(allReports.filter(r=>r.status!=="Resolved")).length);
-  setText("nav-badge-critical",   allReports.filter(r=>r.severity==="Critical"&&r.status!=="Resolved").length);
-  setText("nav-badge-unresolved", allReports.filter(r=>r.status!=="Resolved").length);
-  const avg=computeAllNeighborhoods().reduce((s,n)=>s+n.ecoScore,0)/(computeAllNeighborhoods().length||1);
-  setText("nav-badge-overview", Math.round(avg)+"🌿");
+  setText("nav-badge-hotspots",   _hotspotClusters.length);
+  setText("nav-badge-critical",   allReports.filter(r => r.severity === "Critical" && r.status !== "Resolved").length);
+  setText("nav-badge-unresolved", allReports.filter(r => r.status !== "Resolved").length);
+  const avg = _neighborhoods.length
+    ? _neighborhoods.reduce((s, n) => s + n.ecoScore, 0) / _neighborhoods.length
+    : 0;
+  setText("nav-badge-overview", Math.round(avg) + "🌿");
 }
 
-/* ─── CHARTS ─── */
+
+/* ═══════════════════════════════════════════════════════════
+   CHARTS [FIX M-1: safe destroy + guard against canvas reuse]
+═══════════════════════════════════════════════════════════ */
+function safeDestroyChart(chartRef) {
+  if (chartRef) {
+    try { chartRef.destroy(); } catch(_) { /* already destroyed or canvas gone */ }
+  }
+  return null;
+}
+
 function updateChartType() {
-  const types = Object.keys(TYPE_COLORS);
-  const counts = {}; types.forEach(t=>counts[t]=0);
-  allReports.forEach(r=>{ if(counts[r.type]!==undefined) counts[r.type]++; });
-  const total = allReports.length;
-  setText("chart-type-meta", `${total} reports`);
-  if(chartType){chartType.destroy();chartType=null;}
-  chartType = new Chart(document.getElementById("chart-type"),{
-    type:"doughnut",
-    data:{
-      labels:types,
-      datasets:[{data:types.map(t=>counts[t]),backgroundColor:types.map(t=>TYPE_COLORS[t]+"BB"),borderColor:types.map(t=>TYPE_COLORS[t]),borderWidth:2}]
-    },
-    options:{responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw}`}}}}
-  });
-  document.getElementById("chart-type-legend").innerHTML = types.map(t=>`
-    <div class="legend-row">
-      <span class="legend-dot" style="background:${TYPE_COLORS[t]}"></span>
-      <span class="legend-label">${t}</span>
-      <span class="legend-count">${counts[t]}</span>
-      <span class="legend-pct">${Math.round(counts[t]/Math.max(total,1)*100)}%</span>
-    </div>`).join("");
+  try {
+    const types = Object.keys(TYPE_COLORS);
+    const counts = {}; types.forEach(t => counts[t] = 0);
+    allReports.forEach(r => { if (counts[r.type] !== undefined) counts[r.type]++; });
+    const total = allReports.length;
+    setText("chart-type-meta", `${total} reports`);
+    chartType = safeDestroyChart(chartType);
+    chartType = new Chart(document.getElementById("chart-type"), {
+      type: "doughnut",
+      data: {
+        labels: types,
+        datasets: [{ data: types.map(t=>counts[t]), backgroundColor: types.map(t=>TYPE_COLORS[t]+"BB"), borderColor: types.map(t=>TYPE_COLORS[t]), borderWidth:2 }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, cutout:"65%", plugins:{ tooltip:{ callbacks:{ label:ctx=>`${ctx.label}: ${ctx.raw}` } } } }
+    });
+    document.getElementById("chart-type-legend").innerHTML = types.map(t => `
+      <div class="legend-row">
+        <span class="legend-dot" style="background:${TYPE_COLORS[t]}"></span>
+        <span class="legend-label">${t}</span>
+        <span class="legend-count">${counts[t]}</span>
+        <span class="legend-pct">${Math.round(counts[t]/Math.max(total,1)*100)}%</span>
+      </div>`).join("");
+  } catch(e) { console.error("Chart Type error:", e); }
 }
 
 function updateChartTrend() {
-  const days=14, now=new Date(), totals=new Array(days).fill(0), opens=new Array(days).fill(0), labels=[];
-  for(let i=days-1;i>=0;i--){const d=new Date(now-i*86400000);labels.push(d.toLocaleDateString("en-US",{month:"short",day:"numeric"}));}
-  allReports.forEach(r=>{
-    const ts=r.timestamp?.toDate?.(); if(!ts) return;
-    const diff=Math.floor((now-ts)/86400000);
-    if(diff<days){totals[days-1-diff]++;if(r.status!=="Resolved")opens[days-1-diff]++;}
-  });
-  setText("chart-trend-meta",`Peak: ${Math.max(...totals,1)} reports/day`);
-  if(chartTrend){chartTrend.destroy();chartTrend=null;}
-  chartTrend=new Chart(document.getElementById("chart-trend"),{
-    type:"line",
-    data:{labels,datasets:[
-      {label:"Total",data:totals,borderColor:"#0A7EA4",backgroundColor:"rgba(10,126,164,0.1)",borderWidth:2,pointRadius:3,tension:0.4,fill:true},
-      {label:"Open", data:opens, borderColor:"#F4A261",backgroundColor:"rgba(244,162,97,0.05)",borderWidth:2,borderDash:[4,3],pointRadius:2,tension:0.4,fill:false}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
-      plugins:{legend:{display:true,labels:{boxWidth:10,padding:16,font:{size:11},color:"#94A3B8"}}},
-      scales:{x:{grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},maxRotation:0,color:"#64748B",callback:(v,i)=>i%2===0?labels[i]:""}},
-              y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}
-  });
+  try {
+    const days = 14, now = new Date(), totals = new Array(days).fill(0), opens = new Array(days).fill(0), labels = [];
+    for (let i = days-1; i >= 0; i--) {
+      const d = new Date(now - i*86400000);
+      labels.push(d.toLocaleDateString("en-US", { month:"short", day:"numeric" }));
+    }
+    allReports.forEach(r => {
+      const ts = r.timestamp?.toDate?.(); if (!ts) return;
+      const diff = Math.floor((now-ts)/86400000);
+      if (diff < days) { totals[days-1-diff]++; if (r.status !== "Resolved") opens[days-1-diff]++; }
+    });
+    setText("chart-trend-meta", `Peak: ${Math.max(...totals,1)} reports/day`);
+    chartTrend = safeDestroyChart(chartTrend);
+    chartTrend = new Chart(document.getElementById("chart-trend"), {
+      type:"line",
+      data:{labels, datasets:[
+        {label:"Total",data:totals,borderColor:"#0A7EA4",backgroundColor:"rgba(10,126,164,0.1)",borderWidth:2,pointRadius:3,tension:0.4,fill:true},
+        {label:"Open",data:opens,borderColor:"#F4A261",backgroundColor:"rgba(244,162,97,0.05)",borderWidth:2,borderDash:[4,3],pointRadius:2,tension:0.4,fill:false}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+        plugins:{legend:{display:true,labels:{boxWidth:10,padding:16,font:{size:11},color:"#94A3B8"}}},
+        scales:{
+          x:{grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},maxRotation:0,color:"#64748B",callback:(v,i)=>i%2===0?labels[i]:""}},
+          y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}
+        }}
+    });
+  } catch(e) { console.error("Chart Trend error:", e); }
 }
 
 function updateChartSeverity() {
-  const order=["Low","Medium","High","Critical"],counts={Low:0,Medium:0,High:0,Critical:0};
-  allReports.forEach(r=>{if(counts[r.severity]!==undefined)counts[r.severity]++;});
-  const total=Object.values(counts).reduce((s,v)=>s+v,0);
-  setText("chart-sev-meta",`${total} classified`);
-  if(chartSeverity){chartSeverity.destroy();chartSeverity=null;}
-  chartSeverity=new Chart(document.getElementById("chart-severity"),{
-    type:"bar",
-    data:{labels:order,datasets:[{data:order.map(k=>counts[k]),backgroundColor:order.map(k=>SEV_COLORS[k]+"88"),borderColor:order.map(k=>SEV_COLORS[k]),borderWidth:2,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}
-  });
-  document.getElementById("chart-sev-legend").innerHTML=order.map(k=>`
-    <div class="legend-row">
-      <span class="legend-dot" style="background:${SEV_COLORS[k]}"></span>
-      <span class="legend-label">${k}</span>
-      <span class="legend-count">${counts[k]}</span>
-      <span class="legend-pct">${Math.round(counts[k]/Math.max(total,1)*100)}%</span>
-    </div>`).join("");
+  try {
+    const order = ["Low","Medium","High","Critical"], counts = {Low:0,Medium:0,High:0,Critical:0};
+    allReports.forEach(r => { if (counts[r.severity] !== undefined) counts[r.severity]++; });
+    const total = Object.values(counts).reduce((s,v)=>s+v,0);
+    setText("chart-sev-meta", `${total} classified`);
+    chartSeverity = safeDestroyChart(chartSeverity);
+    chartSeverity = new Chart(document.getElementById("chart-severity"), {
+      type:"bar",
+      data:{labels:order,datasets:[{data:order.map(k=>counts[k]),backgroundColor:order.map(k=>SEV_COLORS[k]+"88"),borderColor:order.map(k=>SEV_COLORS[k]),borderWidth:2,borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}
+    });
+    document.getElementById("chart-sev-legend").innerHTML = order.map(k => `
+      <div class="legend-row">
+        <span class="legend-dot" style="background:${SEV_COLORS[k]}"></span>
+        <span class="legend-label">${k}</span>
+        <span class="legend-count">${counts[k]}</span>
+        <span class="legend-pct">${Math.round(counts[k]/Math.max(total,1)*100)}%</span>
+      </div>`).join("");
+  } catch(e) { console.error("Chart Severity error:", e); }
 }
 
-/* ─── TABLES ─── */
+
+/* ═══════════════════════════════════════════════════════════
+   TABLES
+═══════════════════════════════════════════════════════════ */
+function filterReports(reports, search, status, type, severity) {
+  return reports.filter(r => {
+    if (status !== "all" && r.status !== status) return false;
+    if (type !== "all" && r.type !== type) return false;
+    if (severity !== "all" && r.severity !== severity) return false;
+    if (search) {
+      const blob = `${r.type} ${r.description} ${r.reporter} ${r.status}`.toLowerCase();
+      if (!blob.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function sortRows(reports, field, dir) {
+  return [...reports].sort((a,b) => {
+    let av = a[field], bv = b[field];
+    if (field === "timestamp") { av = a.timestamp?.seconds||0; bv = b.timestamp?.seconds||0; }
+    if (typeof av === "string") { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return dir === "asc" ? -1 : 1;
+    if (av > bv) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+}
+
 function renderMiniTable() {
-  const search=lower(document.getElementById("mini-search")?.value||"");
-  const stF=document.getElementById("mini-status-filter")?.value||"all";
-  const tyF=document.getElementById("mini-type-filter")?.value||"all";
-  let rows=filterReports(allReports,search,stF,tyF,"all");
-  rows=sortRows(rows,sortField,sortDir).slice(0,20);
-  const tbody=document.getElementById("mini-table-body");
-  if(!tbody) return;
-  tbody.innerHTML=rows.length===0?`<tr><td colspan="7" class="table-empty">No reports match filters.</td></tr>`:rows.map(r=>buildRow(r,false)).join("");
+  const search = lower(document.getElementById("mini-search")?.value || "");
+  const stF = document.getElementById("mini-status-filter")?.value || "all";
+  const tyF = document.getElementById("mini-type-filter")?.value || "all";
+  let rows = filterReports(allReports, search, stF, tyF, "all");
+  rows = sortRows(rows, sortField, sortDir).slice(0, 20);
+  const tbody = document.getElementById("mini-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = rows.length === 0
+    ? `<tr><td colspan="7" class="table-empty">No reports match filters.</td></tr>`
+    : rows.map(r => buildRow(r, false)).join("");
 }
 
 function renderFullTable() {
-  const search=lower(document.getElementById("full-search")?.value||"");
-  const stF=document.getElementById("full-status-filter")?.value||"all";
-  const tyF=document.getElementById("full-type-filter")?.value||"all";
-  const svF=document.getElementById("full-sev-filter")?.value||"all";
-  const dFrom=document.getElementById("date-from")?.value;
-  const dTo=document.getElementById("date-to")?.value;
-  let rows=filterReports(allReports,search,stF,tyF,svF);
-  if(dFrom){const ms=new Date(dFrom).getTime();rows=rows.filter(r=>{const ts=r.timestamp?.toDate?.();return ts&&ts.getTime()>=ms;});}
-  if(dTo){const td=new Date(dTo);td.setHours(23,59,59,999);rows=rows.filter(r=>{const ts=r.timestamp?.toDate?.();return ts&&ts.getTime()<=td.getTime();});}
-  rows=sortRows(rows,fullSortF,fullSortD);
-  const cEl=document.getElementById("full-table-count");if(cEl)cEl.textContent=`${rows.length} of ${allReports.length}`;
-  const tbody=document.getElementById("full-table-body");if(!tbody)return;
-  tbody.innerHTML=rows.length===0?`<tr><td colspan="9" class="table-empty">No reports match filters.</td></tr>`:rows.map(r=>buildRow(r,true)).join("");
+  const search = lower(document.getElementById("full-search")?.value || "");
+  const stF = document.getElementById("full-status-filter")?.value || "all";
+  const tyF = document.getElementById("full-type-filter")?.value || "all";
+  const svF = document.getElementById("full-sev-filter")?.value || "all";
+  const dFrom = document.getElementById("date-from")?.value;
+  const dTo = document.getElementById("date-to")?.value;
+  let rows = filterReports(allReports, search, stF, tyF, svF);
+  if (dFrom) {
+    const ms = new Date(dFrom).getTime();
+    rows = rows.filter(r => { const ts = r.timestamp?.toDate?.(); return ts && ts.getTime() >= ms; });
+  }
+  if (dTo) {
+    const td = new Date(dTo); td.setHours(23,59,59,999);
+    rows = rows.filter(r => { const ts = r.timestamp?.toDate?.(); return ts && ts.getTime() <= td.getTime(); });
+  }
+  rows = sortRows(rows, fullSortF, fullSortD);
+  const cEl = document.getElementById("full-table-count");
+  if (cEl) cEl.textContent = `${rows.length} of ${allReports.length}`;
+  const tbody = document.getElementById("full-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = rows.length === 0
+    ? `<tr><td colspan="9" class="table-empty">No reports match filters.</td></tr>`
+    : rows.map(r => buildRow(r, true)).join("");
 }
 
+/* [FIX C-2/C-5] buildRow uses data-attributes for action buttons */
 function buildRow(r, full) {
-  const color=TYPE_COLORS[r.type]||"#6B7280";
-  const stCls=`badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
-  const svCls=`badge-${(r.severity||"low").toLowerCase()}`;
-  const ts=r.timestamp?.toDate?.();
-  const score=r.urgencyScore||0;
-  const uc=score>=8?"#DC2626":score>=5?"#F4A261":"#2A9D8F";
-  const coordsCol=full?`<td style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">${r.lat?.toFixed(4)||"—"},${r.lng?.toFixed(4)||"—"}</td>`:"";
-  const descCol=full?`<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--subtle);">${esc(r.description||"")}</td>`:"";
+  const color = TYPE_COLORS[r.type] || "#6B7280";
+  const stCls = `badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+  const svCls = `badge-${(r.severity||"low").toLowerCase()}`;
+  const ts = r.timestamp?.toDate?.();
+  const score = r.urgencyScore || 0;
+  const uc = score >= 8 ? "#DC2626" : score >= 5 ? "#F4A261" : "#2A9D8F";
+  const coordsCol = full ? `<td style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">${r.lat?.toFixed(4)||"—"},${r.lng?.toFixed(4)||"—"}</td>` : "";
+  const descCol = full ? `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--subtle);">${esc(r.description||"")}</td>` : "";
   return `<tr>
     <td><div class="td-type"><span class="type-dot" style="background:${color}"></span>${esc(r.type)}</div></td>
     <td><span class="badge ${svCls}">${esc(r.severity||"—")}</span></td>
@@ -1788,319 +2189,437 @@ function buildRow(r, full) {
     <td><div class="urgency-bar"><div class="urgency-pip" style="width:${Math.min(score/12*100,100)}%;background:${uc};min-width:4px;max-width:56px;"></div><span style="font-family:var(--font-mono);font-size:11px;color:${uc};">${score}</span><span class="urgency-info" data-tip="${esc(URGENCY_TIP)}">ℹ️</span></div></td>
     ${descCol}
     <td style="color:var(--subtle);">${esc(r.reporter||"Anonymous")}</td>
-    <td style="font-family:var(--font-mono);font-size:10px;">${ts?formatTimeAgo(ts):"—"}</td>
+    <td style="font-family:var(--font-mono);font-size:10px;">${ts ? formatTimeAgo(ts) : "—"}</td>
     ${coordsCol}
     <td>${getActionBtn(r)}</td>
   </tr>`;
 }
 
+/* [FIX C-2] Action buttons use data-attributes instead of inline onclick */
 function getActionBtn(r) {
-  if(r.status==="Open") return `<button class="action-btn action-progress" onclick="window._dbProgress('${r.id}')">▶ In Progress</button>`;
-  if(r.status==="In Progress") return `<button class="action-btn action-resolve" onclick="window._dbResolve('${r.id}')">✓ Resolve</button>`;
-  return `<button class="action-btn action-reopen" onclick="window._dbReopen('${r.id}')">↩ Reopen</button>`;
+  if (r.status === "Open")
+    return `<button class="action-btn action-progress" data-action="progress" data-id="${esc(r.id)}">▶ In Progress</button>`;
+  if (r.status === "In Progress")
+    return `<button class="action-btn action-resolve" data-action="resolve" data-id="${esc(r.id)}">✓ Resolve</button>`;
+  return `<button class="action-btn action-reopen" data-action="reopen" data-id="${esc(r.id)}">↩ Reopen</button>`;
 }
 
+/* [FIX C-2] Event delegation for table action buttons — replaces window._dbProgress/_dbResolve/_dbReopen */
+document.addEventListener("click", e => {
+  const actionBtn = e.target.closest("[data-action='progress'], [data-action='reopen']");
+  if (!actionBtn) return;
+  const id = actionBtn.dataset.id;
+  const action = actionBtn.dataset.action;
+  if (!id) return;
+  if (action === "progress") updateStatus(id, "In Progress", "Marked In Progress.");
+  else if (action === "reopen") updateStatus(id, "Open", "Report Reopened.");
+});
+
+/* [FIX C-3] Immutable state updates in demo mode */
 async function updateStatus(id, status, msg) {
-  if(!db){const r=allReports.find(x=>x.id===id);if(r){r.status=status;renderAll();showToast(msg+" (demo).","success");}return;}
-  try{await updateDoc(doc(db,"reports",id),{status,resolvedAt:status==="Resolved"?serverTimestamp():null});showToast(msg,"success");}
-  catch(e){showToast("Failed: "+e.message,"error");}
-}
-
-window._dbProgress = id => updateStatus(id,"In Progress","Marked In Progress.");
-window._dbResolve  = id => updateStatus(id,"Resolved","Report Resolved.");
-window._dbReopen   = id => updateStatus(id,"Open","Report Reopened.");
-window._resolveReport = id => updateStatus(id,"Resolved","Resolved.").then(()=>map.closePopup());
-
-/* ─── HOTSPOT VIEW ─── */
-function renderHotspots() {
-  const open=allReports.filter(r=>r.status!=="Resolved");
-  const clusters=computeHotspotClusters(open);
-  setText("hotspot-meta",`${clusters.length} active hotspot${clusters.length!==1?"s":""}`);
-  const container=document.getElementById("hotspot-list-container");
-  container.innerHTML=clusters.length===0
-    ?`<div class="table-empty">🎉 No hotspots detected. Good news!</div>`
-    :`<div class="hotspot-list">${clusters.map((c,i)=>`
-        <div class="hotspot-row">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:var(--text);">#${i+1} — ${c.types.join(", ")}</div>
-            <div class="hotspot-loc">${c.center.lat.toFixed(4)}, ${c.center.lng.toFixed(4)}</div>
-            <a href="#" onclick="window._flyToCluster(${c.center.lat},${c.center.lng})" style="font-size:10px;color:var(--accent-bright);text-decoration:none;">View on map →</a>
-          </div>
-          <div class="hotspot-count">${c.count}</div>
-        </div>`).join("")}
-      </div>`;
-
-  window._flyToCluster = (lat,lng) => { switchView("map"); setTimeout(()=>map.flyTo([lat,lng],15,{duration:0.8}),50); };
-
-  const types=Object.keys(TYPE_COLORS);
-  const resolvedPcts=types.map(t=>{const tr=allReports.filter(r=>r.type===t);return!tr.length?0:Math.round(tr.filter(r=>r.status==="Resolved").length/tr.length*100);});
-  if(chartResolution){chartResolution.destroy();chartResolution=null;}
-  chartResolution=new Chart(document.getElementById("chart-resolution"),{type:"bar",data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Resolution %",data:resolvedPcts,backgroundColor:resolvedPcts.map(p=>p>=70?"rgba(42,157,143,0.5)":p>=40?"rgba(244,162,97,0.5)":"rgba(230,57,70,0.5)"),borderColor:resolvedPcts.map(p=>p>=70?"#2A9D8F":p>=40?"#F4A261":"#E63946"),borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B",callback:v=>v+"%"}}},plugins:{tooltip:{callbacks:{label:ctx=>` ${ctx.raw}% resolved`}}}}});
-
-  const avgU=types.map(t=>{const tr=allReports.filter(r=>r.type===t&&r.urgencyScore!=null);return!tr.length?0:parseFloat((tr.reduce((s,r)=>s+r.urgencyScore,0)/tr.length).toFixed(1));});
-  if(chartAvgUrgency){chartAvgUrgency.destroy();chartAvgUrgency=null;}
-  chartAvgUrgency=new Chart(document.getElementById("chart-avg-urgency"),{type:"bar",data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Avg Urgency",data:avgU,backgroundColor:types.map(t=>(TYPE_COLORS[t]||"#6B7280")+"88"),borderColor:types.map(t=>TYPE_COLORS[t]||"#6B7280"),borderWidth:2,borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{beginAtZero:true,max:12,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}},y:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}}}}});
-
-  const hr=new Array(24).fill(0);
-  allReports.forEach(r=>{const ts=r.timestamp?.toDate?.();if(ts)hr[ts.getHours()]++;});
-  const mx=Math.max(...hr,1);
-  if(chartHourly){chartHourly.destroy();chartHourly=null;}
-  chartHourly=new Chart(document.getElementById("chart-hourly"),{type:"bar",data:{labels:Array.from({length:24},(_,i)=>`${i}:00`),datasets:[{data:hr,backgroundColor:hr.map(v=>v>=mx*0.7?"rgba(230,57,70,0.6)":"rgba(10,126,164,0.4)"),borderColor:hr.map(v=>v>=mx*0.7?"#E63946":"#0A7EA4"),borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:9},color:"#64748B",callback:(v,i)=>i%4===0?`${i}:00`:""}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}});
-}
-
-/* ─── ECOSCORE VIEW ─── */
-const ECOSCORE_NEIGHBORHOODS = NEIGHBORHOODS;
-
-function computeAllNeighborhoods() {
-  const open = allReports.filter(r=>r.status!=="Resolved");
-  const hotspots = computeHotspotClusters(open);
-  return ECOSCORE_NEIGHBORHOODS.map(hood => {
-    const {n,s,e,w}=hood.bounds;
-    const reps=allReports.filter(r=>r.lat<=n&&r.lat>=s&&r.lng<=e&&r.lng>=w);
-    const openR=reps.filter(r=>r.status!=="Resolved");
-    const resolvedR=reps.filter(r=>r.status==="Resolved");
-    const hoodHs=hotspots.filter(h=>h.center.lat<=n&&h.center.lat>=s&&h.center.lng<=e&&h.center.lng>=w);
-    const resolvedWithTime=resolvedR.filter(r=>r.timestamp?.toDate);
-    const avgRes=resolvedWithTime.length?resolvedWithTime.reduce((s,r)=>{const ms=Date.now()-r.timestamp.toDate().getTime();return s+ms/86400000;},0)/resolvedWithTime.length:0;
-    const now=new Date();
-    const resolvedThisMonth=resolvedR.filter(r=>{const d=r.timestamp?.toDate?.();return d&&d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();}).length;
-    const ecoScore=Math.max(0,Math.min(100,Math.round(100-(openR.length*3)-(hoodHs.length*8)-(Math.round(avgRes)*1)+(resolvedThisMonth*2))));
-    const grade=ecoScore>=80?{label:"Healthy",css:"grade-healthy"}:ecoScore>=60?{label:"Moderate",css:"grade-moderate"}:ecoScore>=40?{label:"At Risk",css:"grade-risk"}:{label:"Critical",css:"grade-critical"};
-    return {...hood,ecoScore,grade:grade.label,gradeCss:grade.css,openReports:openR.length,resolvedReports:resolvedR.length,totalReports:reps.length,hotspotCount:hoodHs.length,avgResolutionDays:Math.round(avgRes*10)/10};
-  }).filter(Boolean).sort((a,b)=>a.ecoScore-b.ecoScore);
-}
-
-function renderEcoScore() {
-  const hoods=computeAllNeighborhoods();
-  const grid=document.getElementById("nb-grid");
-  if(!grid) return;
-  if(hoods.every(n=>n.totalReports===0)){
-    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);">
-      <div style="font-size:36px;opacity:0.5;margin-bottom:8px;">📍</div>
-      <p>No reports in any neighbourhood yet.</p>
-      <p style="font-size:12px;margin-top:4px;">Submit a report or click "Load Demo Data".</p>
-    </div>`;
+  if (!db) {
+    /* Demo mode — create a new array with the updated object instead of mutating in place */
+    allReports = allReports.map(r => r.id === id ? { ...r, status } : r);
+    renderAll();
+    showToast(msg + " (demo).", "success");
     return;
   }
-  grid.innerHTML=hoods.map(n=>{
-    const resolveRate=n.totalReports>0?Math.round((n.resolvedReports/n.totalReports)*100):100;
-    const mapLat=((n.bounds.n+n.bounds.s)/2).toFixed(4), mapLng=((n.bounds.e+n.bounds.w)/2).toFixed(4);
-    return `<div class="nb-card ${n.gradeCss}">
-      <div class="nb-header">
-        <div><div class="nb-name">${n.name}</div><div class="nb-grade-label">${n.grade}</div></div>
-        <div><span class="nb-score-num">${n.ecoScore}</span><span class="nb-score-sub">/100</span></div>
-      </div>
-      <div class="nb-progress-bar"><div class="nb-progress-fill" style="width:${n.ecoScore}%"></div></div>
-      <div class="nb-stats">
-        <div class="nb-stat"><span class="nb-stat-val" style="color:var(--danger)">${n.openReports}</span><span class="nb-stat-lbl">Open</span></div>
-        <div class="nb-stat"><span class="nb-stat-val" style="color:var(--success)">${n.resolvedReports}</span><span class="nb-stat-lbl">Fixed</span></div>
-        <div class="nb-stat"><span class="nb-stat-val">${n.hotspotCount}</span><span class="nb-stat-lbl">Spots</span></div>
-        <div class="nb-stat"><span class="nb-stat-val">${n.avgResolutionDays}d</span><span class="nb-stat-lbl">Avg Fix</span></div>
-      </div>
-      <div class="nb-footer">
-        <span style="font-size:11px;color:var(--muted);">Resolve: <strong>${resolveRate}%</strong></span>
-        <a href="#" onclick="window._flyToCluster(${((n.bounds.n+n.bounds.s)/2).toFixed(4)},${((n.bounds.e+n.bounds.w)/2).toFixed(4)})" class="btn-view-map">View map →</a>
-      </div>
-    </div>`;
-  }).join("");
-
-  if(chartEcoScore){chartEcoScore.destroy();chartEcoScore=null;}
-  const gradeColors=hoods.map(n=>n.gradeCss==="grade-healthy"?"#2A9D8F":n.gradeCss==="grade-moderate"?"#d4ac0d":n.gradeCss==="grade-risk"?"#F4A261":"#E63946");
-  chartEcoScore=new Chart(document.getElementById("chart-ecoscore"),{type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"EcoScore",data:hoods.map(n=>n.ecoScore),backgroundColor:gradeColors.map(c=>c+"88"),borderColor:gradeColors,borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}}}}});
-
-  if(chartAreaBar){chartAreaBar.destroy();chartAreaBar=null;}
-  chartAreaBar=new Chart(document.getElementById("chart-area-bar"),{type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"Open",data:hoods.map(n=>n.openReports),backgroundColor:"rgba(230,57,70,0.7)",borderColor:"#E63946",borderWidth:1,borderRadius:4},{label:"Resolved",data:hoods.map(n=>n.resolvedReports),backgroundColor:"rgba(42,157,143,0.7)",borderColor:"#2A9D8F",borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{boxWidth:10,padding:12,font:{size:11},color:"#94A3B8"}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}});
+  try {
+    await updateDoc(doc(db, "reports", id), {
+      status,
+      resolvedAt: status === "Resolved" ? serverTimestamp() : null
+    });
+    showToast(msg, "success");
+  } catch(e) {
+    showToast("Failed: " + e.message, "error");
+  }
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   HOTSPOT VIEW [FIX H-1: accepts pre-computed clusters]
+═══════════════════════════════════════════════════════════ */
+/* [FIX L-5] flyToCluster defined once, not inside renderHotspots */
+function flyToCluster(lat, lng) {
+  switchView("map");
+  setTimeout(() => map.flyTo([lat, lng], 15, { duration:0.8 }), 50);
+}
+
+function renderHotspots(_hotspotClusters) {
+  try {
+    const clusters = _hotspotClusters;
+    setText("hotspot-meta", `${clusters.length} active hotspot${clusters.length !== 1 ? "s" : ""}`);
+    const container = document.getElementById("hotspot-list-container");
+    container.innerHTML = clusters.length === 0
+      ? `<div class="table-empty">🎉 No hotspots detected. Good news!</div>`
+      : `<div class="hotspot-list">${clusters.map((c,i) => `
+          <div class="hotspot-row">
+            <div>
+              <div style="font-weight:700;font-size:12px;color:var(--text);">#${i+1} — ${c.types.join(", ")}</div>
+              <div class="hotspot-loc">${c.center.lat.toFixed(4)}, ${c.center.lng.toFixed(4)}</div>
+              <button class="btn-view-map" data-action="fly" data-lat="${c.center.lat.toFixed(6)}" data-lng="${c.center.lng.toFixed(6)}" style="font-size:10px;color:var(--accent-bright);cursor:pointer;">View on map →</button>
+            </div>
+            <div class="hotspot-count">${c.count}</div>
+          </div>`).join("")}
+        </div>`;
+
+    const types = Object.keys(TYPE_COLORS);
+    const resolvedPcts = types.map(t => {
+      const tr = allReports.filter(r => r.type === t);
+      return !tr.length ? 0 : Math.round(tr.filter(r => r.status === "Resolved").length / tr.length * 100);
+    });
+    chartResolution = safeDestroyChart(chartResolution);
+    chartResolution = new Chart(document.getElementById("chart-resolution"), { type:"bar", data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Resolution %",data:resolvedPcts,backgroundColor:resolvedPcts.map(p=>p>=70?"rgba(42,157,143,0.5)":p>=40?"rgba(244,162,97,0.5)":"rgba(230,57,70,0.5)"),borderColor:resolvedPcts.map(p=>p>=70?"#2A9D8F":p>=40?"#F4A261":"#E63946"),borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B",callback:v=>v+"%"}}},plugins:{tooltip:{callbacks:{label:ctx=>` ${ctx.raw}% resolved`}}}} });
+
+    const avgU = types.map(t => {
+      const tr = allReports.filter(r => r.type === t && r.urgencyScore != null);
+      return !tr.length ? 0 : parseFloat((tr.reduce((s,r)=>s+r.urgencyScore,0)/tr.length).toFixed(1));
+    });
+    chartAvgUrgency = safeDestroyChart(chartAvgUrgency);
+    chartAvgUrgency = new Chart(document.getElementById("chart-avg-urgency"), { type:"bar",data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Avg Urgency",data:avgU,backgroundColor:types.map(t=>(TYPE_COLORS[t]||"#6B7280")+"88"),borderColor:types.map(t=>TYPE_COLORS[t]||"#6B7280"),borderWidth:2,borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{beginAtZero:true,max:12,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}},y:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}}}} });
+
+    const hr = new Array(24).fill(0);
+    allReports.forEach(r => { const ts = r.timestamp?.toDate?.(); if (ts) hr[ts.getHours()]++; });
+    const mx = Math.max(...hr, 1);
+    chartHourly = safeDestroyChart(chartHourly);
+    chartHourly = new Chart(document.getElementById("chart-hourly"), { type:"bar",data:{labels:Array.from({length:24},(_,i)=>`${i}:00`),datasets:[{data:hr,backgroundColor:hr.map(v=>v>=mx*0.7?"rgba(230,57,70,0.6)":"rgba(10,126,164,0.4)"),borderColor:hr.map(v=>v>=mx*0.7?"#E63946":"#0A7EA4"),borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:9},color:"#64748B",callback:(v,i)=>i%4===0?`${i}:00`:""}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}} });
+  } catch(e) { console.error("renderHotspots error:", e); }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ECOSCORE VIEW [FIX H-1: accepts pre-computed neighborhoods]
+═══════════════════════════════════════════════════════════ */
+function renderEcoScore(_neighborhoods) {
+  try {
+    const hoods = _neighborhoods;
+    const grid = document.getElementById("nb-grid");
+    if (!grid) return;
+    if (hoods.every(n => n.totalReports === 0)) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);">
+        <div style="font-size:36px;opacity:0.5;margin-bottom:8px;">📍</div>
+        <p>No reports in any neighbourhood yet.</p>
+        <p style="font-size:12px;margin-top:4px;">Submit a report or click "Load Demo Data".</p>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = hoods.map(n => {
+      const resolveRate = n.totalReports > 0 ? Math.round((n.resolvedReports/n.totalReports)*100) : 100;
+      const cLat = ((n.bounds.n+n.bounds.s)/2).toFixed(6);
+      const cLng = ((n.bounds.e+n.bounds.w)/2).toFixed(6);
+      return `<div class="nb-card ${n.gradeCss}">
+        <div class="nb-header">
+          <div><div class="nb-name">${n.name}</div><div class="nb-grade-label">${n.grade}</div></div>
+          <div><span class="nb-score-num">${n.ecoScore}</span><span class="nb-score-sub">/100</span></div>
+        </div>
+        <div class="nb-progress-bar"><div class="nb-progress-fill" style="width:${n.ecoScore}%"></div></div>
+        <div class="nb-impact-est">💧 Est. <strong>${(n.openLeaks * 3000).toLocaleString()}</strong> L/day at risk from ${n.openLeaks} open leak${n.openLeaks !== 1 ? "s" : ""}</div>
+        <div class="nb-stats">
+          <div class="nb-stat"><span class="nb-stat-val" style="color:var(--danger)">${n.openReports}</span><span class="nb-stat-lbl">Open</span></div>
+          <div class="nb-stat"><span class="nb-stat-val" style="color:var(--success)">${n.resolvedReports}</span><span class="nb-stat-lbl">Fixed</span></div>
+          <div class="nb-stat"><span class="nb-stat-val">${n.hotspotCount}</span><span class="nb-stat-lbl">Spots</span></div>
+          <div class="nb-stat"><span class="nb-stat-val">${n.avgResolutionDays}d</span><span class="nb-stat-lbl">Avg Fix</span></div>
+        </div>
+        <div class="nb-footer">
+          <span style="font-size:11px;color:var(--muted);">Resolve: <strong>${resolveRate}%</strong></span>
+          <button class="btn-view-map" data-action="fly" data-lat="${cLat}" data-lng="${cLng}">View map →</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    chartEcoScore = safeDestroyChart(chartEcoScore);
+    const gradeColors = hoods.map(n =>
+      n.gradeCss === "grade-healthy" ? "#2A9D8F"
+      : n.gradeCss === "grade-moderate" ? "#d4ac0d"
+      : n.gradeCss === "grade-risk" ? "#F4A261"
+      : "#E63946"
+    );
+    chartEcoScore = new Chart(document.getElementById("chart-ecoscore"), { type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"EcoScore",data:hoods.map(n=>n.ecoScore),backgroundColor:gradeColors.map(c=>c+"88"),borderColor:gradeColors,borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}}}} });
+
+    chartAreaBar = safeDestroyChart(chartAreaBar);
+    chartAreaBar = new Chart(document.getElementById("chart-area-bar"), { type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"Open",data:hoods.map(n=>n.openReports),backgroundColor:"rgba(230,57,70,0.7)",borderColor:"#E63946",borderWidth:1,borderRadius:4},{label:"Resolved",data:hoods.map(n=>n.resolvedReports),backgroundColor:"rgba(42,157,143,0.7)",borderColor:"#2A9D8F",borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{boxWidth:10,padding:12,font:{size:11},color:"#94A3B8"}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}} });
+  } catch(e) { console.error("renderEcoScore error:", e); }
+}
+
 
 /* ─── ACTIVITY FEED ─── */
 function renderActivityFeed() {
-  const list=document.getElementById("activity-list"); if(!list) return;
-  const recent=allReports.slice(0,14);
-  setText("activity-meta",`${allReports.length} total`);
-  if(!recent.length){list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;">No reports yet.</div>`;return;}
-  list.innerHTML=recent.map(r=>{
-    const color=TYPE_COLORS[r.type]||"#6B7280";
-    const ts=r.timestamp?.toDate?.();
-    const stCls=`badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+  const list = document.getElementById("activity-list"); if (!list) return;
+  const recent = allReports.slice(0, 14);
+  setText("activity-meta", `${allReports.length} total`);
+  if (!recent.length) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;">No reports yet.</div>`;
+    return;
+  }
+  list.innerHTML = recent.map(r => {
+    const color = TYPE_COLORS[r.type] || "#6B7280";
+    const ts = r.timestamp?.toDate?.();
+    const stCls = `badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
     return `<div class="activity-item">
       <div class="activity-dot" style="background:${color}"></div>
       <div class="activity-body">
         <div class="activity-type">${esc(r.type)} · <span class="badge ${stCls}" style="font-size:9px;">${esc(r.status||"Open")}</span></div>
         <div class="activity-desc">${esc(r.description||"No description")}</div>
-        <div class="activity-time">🕐 ${ts?formatTimeAgo(ts):"—"} · ${esc(r.reporter||"Anonymous")}</div>
+        <div class="activity-time">🕐 ${ts ? formatTimeAgo(ts) : "—"} · ${esc(r.reporter||"Anonymous")}</div>
       </div>
     </div>`;
   }).join("");
 }
 
-/* ─── REPORT FORM ─── */
-const reportPanel=document.getElementById("report-panel");
-const panelClose=document.getElementById("panel-close-btn");
-function openPanel(){reportPanel.classList.add("open");}
-function closePanel(){reportPanel.classList.remove("open");exitPickPinMode();resetForm();}
-document.getElementById("report-btn").addEventListener("click",openPanel);
-document.getElementById("topbar-report-btn").addEventListener("click",()=>{switchView("map");setTimeout(openPanel,50);});
-panelClose.addEventListener("click",closePanel);
 
-// Type grid buttons
-document.getElementById("type-grid").addEventListener("click",e=>{
-  const btn=e.target.closest(".type-btn"); if(!btn) return;
-  document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("selected"));
+/* ═══════════════════════════════════════════════════════════
+   REPORT FORM
+═══════════════════════════════════════════════════════════ */
+const reportPanel = document.getElementById("report-panel");
+const panelClose  = document.getElementById("panel-close-btn");
+
+function openPanel() { reportPanel.classList.add("open"); }
+function closePanel() { reportPanel.classList.remove("open"); exitPickPinMode(); resetForm(); }
+
+document.getElementById("report-btn").addEventListener("click", openPanel);
+document.getElementById("topbar-report-btn").addEventListener("click", () => {
+  switchView("map"); setTimeout(openPanel, 50);
+});
+panelClose.addEventListener("click", closePanel);
+
+/* Type grid buttons */
+document.getElementById("type-grid").addEventListener("click", e => {
+  const btn = e.target.closest(".type-btn"); if (!btn) return;
+  document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
-  selectedType=btn.dataset.type;
+  selectedType = btn.dataset.type;
   document.getElementById("type-error").classList.remove("visible");
 });
 
-// Severity slider
-const sevSlider=document.getElementById("sev-slider");
-sevSlider.addEventListener("input",()=>{
-  const labels=["Low","Medium","High","Critical"];
-  const colors=["#64748B","#F4A261","#E63946","#DC2626"];
-  const v=parseInt(sevSlider.value)-1;
-  const el=document.getElementById("sev-label");
-  el.textContent=labels[v]; el.style.color=colors[v];
+/* Severity slider */
+const sevSlider = document.getElementById("sev-slider");
+sevSlider.addEventListener("input", () => {
+  const labels = ["Low","Medium","High","Critical"];
+  const colors = ["#64748B","#F4A261","#E63946","#DC2626"];
+  const v = parseInt(sevSlider.value) - 1;
+  const el = document.getElementById("sev-label");
+  el.textContent = labels[v]; el.style.color = colors[v];
 });
 
-// Char counter
-document.getElementById("issue-desc").addEventListener("input",function(){
-  document.getElementById("char-count").textContent=this.value.length;
+/* Char counter */
+document.getElementById("issue-desc").addEventListener("input", function() {
+  document.getElementById("char-count").textContent = this.value.length;
 });
 
-// Pin mode
-const mapPickBtn=document.getElementById("map-pick-btn");
-const pinModeHint=document.getElementById("pin-mode-hint");
-mapPickBtn.addEventListener("click",()=>{ pickingPin?exitPickPinMode():enterPickPinMode(); });
-function enterPickPinMode(){pickingPin=true;mapPickBtn.classList.add("active");mapPickBtn.textContent="✕ Cancel";pinModeHint.classList.add("visible");map.getContainer().style.cursor="crosshair";}
-function exitPickPinMode(){pickingPin=false;mapPickBtn.classList.remove("active");mapPickBtn.textContent="📍 Click Map";pinModeHint.classList.remove("visible");map.getContainer().style.cursor="";}
-map.on("click",e=>{
-  if(!pickingPin) return;
-  selectedLat=e.latlng.lat; selectedLng=e.latlng.lng;
-  if(pinMarker) map.removeLayer(pinMarker);
-  pinMarker=L.marker([selectedLat,selectedLng],{icon:L.divIcon({html:`<div style="background:var(--danger);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(230,57,70,0.3)"></div>`,className:"",iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
-  setLocStatus(`📍 ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`,true);
-  exitPickPinMode(); openPanel();
-});
+/* Pin mode */
+const mapPickBtn = document.getElementById("map-pick-btn");
+const pinModeHint = document.getElementById("pin-mode-hint");
+mapPickBtn.addEventListener("click", () => { pickingPin ? exitPickPinMode() : enterPickPinMode(); });
 
-// GPS
-const gpsBtn=document.getElementById("gps-btn");
-gpsBtn.addEventListener("click",()=>{
-  if(!navigator.geolocation){showToast("GPS not supported.","error");return;}
-  gpsBtn.disabled=true; gpsBtn.innerHTML='<span class="spinner"></span> Locating…';
-  setLocStatus("📡 Acquiring GPS…",false);
-  navigator.geolocation.getCurrentPosition(pos=>{
-    selectedLat=pos.coords.latitude; selectedLng=pos.coords.longitude;
-    if(pinMarker) map.removeLayer(pinMarker);
-    pinMarker=L.marker([selectedLat,selectedLng],{icon:L.divIcon({html:`<div style="background:var(--success);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(42,157,143,0.3)"></div>`,className:"",iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
-    map.setView([selectedLat,selectedLng],15);
-    setLocStatus(`📡 GPS: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`,true);
-    gpsBtn.disabled=false; gpsBtn.innerHTML="📡 Use GPS";
-    showToast("Location acquired!","success");
-  },err=>{
-    const msgs={1:"Location denied — click the map.",2:"GPS unavailable.",3:"GPS timed out."};
-    showToast(msgs[err.code]||"GPS failed.","error");
-    setLocStatus("Location unavailable. Click the map.",false,true);
-    gpsBtn.disabled=false; gpsBtn.innerHTML="📡 Use GPS";
-  },{timeout:10000,enableHighAccuracy:true,maximumAge:0});
-});
-
-function setLocStatus(msg,ok=false,err=false){
-  const el=document.getElementById("location-status");
-  el.textContent=msg; el.classList.toggle("has-location",ok); el.classList.toggle("error",err);
+function enterPickPinMode() {
+  pickingPin = true;
+  mapPickBtn.classList.add("active");
+  mapPickBtn.textContent = "✕ Cancel";
+  pinModeHint.classList.add("visible");
+  map.getContainer().style.cursor = "crosshair";
 }
 
-// Photo upload
-const photoUploadArea=document.getElementById("photo-upload-area");
-const photoInput=document.getElementById("photo-input");
-photoUploadArea.addEventListener("click",()=>photoInput.click());
-photoUploadArea.addEventListener("dragover",e=>{e.preventDefault();photoUploadArea.style.borderColor="var(--accent)";});
-photoUploadArea.addEventListener("dragleave",()=>{photoUploadArea.style.borderColor="";});
-photoUploadArea.addEventListener("drop",e=>{e.preventDefault();photoUploadArea.style.borderColor="";const f=e.dataTransfer.files[0];if(f)handlePhoto(f);});
-photoInput.addEventListener("change",()=>{if(photoInput.files[0])handlePhoto(photoInput.files[0]);});
-function handlePhoto(file){
-  if(!file.type.startsWith("image/")){showToast("Please select an image file.","error");return;}
-  photoFile=file;
-  const reader=new FileReader();
-  reader.onload=e=>{document.getElementById("photo-preview-img").src=e.target.result;document.getElementById("photo-preview").style.display="block";photoUploadArea.style.display="none";};
-  reader.readAsDataURL(file);
+function exitPickPinMode() {
+  pickingPin = false;
+  mapPickBtn.classList.remove("active");
+  mapPickBtn.textContent = "📍 Click Map";
+  pinModeHint.classList.remove("visible");
+  map.getContainer().style.cursor = "";
 }
-document.getElementById("remove-photo-btn").addEventListener("click",()=>{
-  photoFile=null; document.getElementById("photo-preview").style.display="none";
-  photoUploadArea.style.display="block"; photoInput.value="";
+
+map.on("click", e => {
+  if (!pickingPin) return;
+  selectedLat = e.latlng.lat;
+  selectedLng = e.latlng.lng;
+  if (pinMarker) map.removeLayer(pinMarker);
+  pinMarker = L.marker([selectedLat, selectedLng], {
+    icon: L.divIcon({
+      html: `<div style="background:var(--danger);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(230,57,70,0.3)"></div>`,
+      className: "", iconSize: [14,14], iconAnchor: [7,7]
+    })
+  }).addTo(map);
+  setLocStatus(`📍 ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`, true);
+  exitPickPinMode();
+  openPanel();
 });
 
-// Submit
-document.getElementById("submit-btn").addEventListener("click",handleSubmit);
+/* GPS */
+const gpsBtn = document.getElementById("gps-btn");
+gpsBtn.addEventListener("click", () => {
+  if (!navigator.geolocation) { showToast("GPS not supported.", "error"); return; }
+  gpsBtn.disabled = true;
+  gpsBtn.innerHTML = '<span class="spinner"></span> Locating…';
+  setLocStatus("📡 Acquiring GPS…", false);
+  navigator.geolocation.getCurrentPosition(pos => {
+    selectedLat = pos.coords.latitude;
+    selectedLng = pos.coords.longitude;
+    if (pinMarker) map.removeLayer(pinMarker);
+    pinMarker = L.marker([selectedLat, selectedLng], {
+      icon: L.divIcon({
+        html: `<div style="background:var(--success);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(42,157,143,0.3)"></div>`,
+        className: "", iconSize: [14,14], iconAnchor: [7,7]
+      })
+    }).addTo(map);
+    map.setView([selectedLat, selectedLng], 15);
+    setLocStatus(`📡 GPS: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`, true);
+    gpsBtn.disabled = false; gpsBtn.innerHTML = "📡 Use GPS";
+    showToast("Location acquired!", "success");
+  }, err => {
+    const msgs = {1:"Location denied — click the map.",2:"GPS unavailable.",3:"GPS timed out."};
+    showToast(msgs[err.code] || "GPS failed.", "error");
+    setLocStatus("Location unavailable. Click the map.", false, true);
+    gpsBtn.disabled = false; gpsBtn.innerHTML = "📡 Use GPS";
+  }, { timeout:10000, enableHighAccuracy:true, maximumAge:0 });
+});
+
+function setLocStatus(msg, ok = false, err = false) {
+  const el = document.getElementById("location-status");
+  el.textContent = msg;
+  el.classList.toggle("has-location", ok);
+  el.classList.toggle("error", err);
+}
+
+/* Photo upload [FIX C-4: better validation] [FIX M-4: use createObjectURL] */
+const photoUploadArea = document.getElementById("photo-upload-area");
+const photoInput = document.getElementById("photo-input");
+photoUploadArea.addEventListener("click", () => photoInput.click());
+photoUploadArea.addEventListener("dragover", e => { e.preventDefault(); photoUploadArea.style.borderColor = "var(--accent)"; });
+photoUploadArea.addEventListener("dragleave", () => { photoUploadArea.style.borderColor = ""; });
+photoUploadArea.addEventListener("drop", e => { e.preventDefault(); photoUploadArea.style.borderColor = ""; const f = e.dataTransfer.files[0]; if (f) handlePhoto(f); });
+photoInput.addEventListener("change", () => { if (photoInput.files[0]) handlePhoto(photoInput.files[0]); });
+
+function handlePhoto(file) {
+  /* [FIX C-4] Stricter file validation */
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    showToast("Unsupported image format. Use JPEG, PNG, WebP or GIF.", "error");
+    return;
+  }
+  if (file.size > MAX_PHOTO_SIZE) {
+    showToast(`File too large (${(file.size/1024/1024).toFixed(1)}MB). Max is 10MB.`, "error");
+    return;
+  }
+
+  /* Revoke any previous blob URL to free memory [FIX M-4] */
+  const prevImg = document.getElementById("photo-preview-img");
+  if (prevImg.src && prevImg.src.startsWith("blob:")) URL.revokeObjectURL(prevImg.src);
+
+  photoFile = file;
+  /* [FIX M-4] Use blob URL instead of base64 FileReader */
+  prevImg.src = URL.createObjectURL(file);
+  document.getElementById("photo-preview").style.display = "block";
+  photoUploadArea.style.display = "none";
+}
+
+document.getElementById("remove-photo-btn").addEventListener("click", () => {
+  const img = document.getElementById("photo-preview-img");
+  /* [FIX M-4] Revoke blob URL */
+  if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  photoFile = null;
+  img.src = "";
+  document.getElementById("photo-preview").style.display = "none";
+  document.getElementById("photo-upload-area").style.display = "block";
+  photoInput.value = "";
+});
+
+/* Submit */
+document.getElementById("submit-btn").addEventListener("click", handleSubmit);
+
 async function handleSubmit() {
-  let valid=true;
-  if(!selectedType){document.getElementById("type-error").classList.add("visible");valid=false;}
-  if(!document.getElementById("issue-desc").value.trim()){document.getElementById("desc-error").classList.add("visible");document.getElementById("issue-desc").classList.add("error");valid=false;}else{document.getElementById("desc-error").classList.remove("visible");document.getElementById("issue-desc").classList.remove("error");}
-  if(selectedLat===null){document.getElementById("location-error").classList.add("visible");valid=false;}else{document.getElementById("location-error").classList.remove("visible");}
-  if(!valid) return;
+  let valid = true;
+  if (!selectedType) { document.getElementById("type-error").classList.add("visible"); valid = false; }
+  const descVal = document.getElementById("issue-desc").value.trim();
+  if (!descVal) {
+    document.getElementById("desc-error").classList.add("visible");
+    document.getElementById("issue-desc").classList.add("error");
+    valid = false;
+  } else {
+    document.getElementById("desc-error").classList.remove("visible");
+    document.getElementById("issue-desc").classList.remove("error");
+  }
+  if (selectedLat === null) { document.getElementById("location-error").classList.add("visible"); valid = false; }
+  else { document.getElementById("location-error").classList.remove("visible"); }
+  if (!valid) return;
 
-  if(!db){showToast("Firebase not configured. Can't submit in demo mode.","error");return;}
+  if (!db) { showToast("Firebase not configured. Can't submit in demo mode.", "error"); return; }
 
-  const submitBtn=document.getElementById("submit-btn");
-  submitBtn.disabled=true; submitBtn.textContent="Submitting…";
+  const submitBtn = document.getElementById("submit-btn");
+  submitBtn.disabled = true; submitBtn.textContent = "Submitting…";
 
   try {
-    let photoURL=null;
-    if(photoFile&&storage){
-      const ref=storageRef(storage,`reports/${Date.now()}_${photoFile.name}`);
-      await uploadBytes(ref,photoFile);
-      photoURL=await getDownloadURL(ref);
+    let photoURL = null;
+    if (photoFile && storage) {
+      const ref = storageRef(storage, `reports/${Date.now()}_${photoFile.name}`);
+      await uploadBytes(ref, photoFile);
+      photoURL = await getDownloadURL(ref);
     }
-    const sevLabels=["Low","Medium","High","Critical"];
-    const severity=sevLabels[parseInt(document.getElementById("sev-slider").value)-1]||"Medium";
-    const urgencyScore=calcUrgencyScore(severity,selectedLat,selectedLng);
-    await addDoc(collection(db,"reports"),{
-      type:selectedType, severity,
-      description:document.getElementById("issue-desc").value.trim(),
-      lat:selectedLat, lng:selectedLng,
-      photoURL, reporter:document.getElementById("reporter-name").value.trim()||"Anonymous",
-      status:"Open", timestamp:serverTimestamp(), urgencyScore
+    const sevLabels = ["Low","Medium","High","Critical"];
+    const severity = sevLabels[parseInt(document.getElementById("sev-slider").value)-1] || "Medium";
+    /* [FIX M-5] Snapshot allReports at call time for density calc */
+    const snapshotReports = [...allReports];
+    const urgencyScore = calcUrgencyScore(severity, selectedLat, selectedLng, snapshotReports);
+    await addDoc(collection(db, "reports"), {
+      type: selectedType, severity,
+      description: descVal,
+      lat: selectedLat, lng: selectedLng,
+      photoURL,
+      reporter: document.getElementById("reporter-name").value.trim() || "Anonymous",
+      status: "Open", timestamp: serverTimestamp(), urgencyScore
     });
-    showToast("Report submitted successfully 🎉","success");
+    showToast("Report submitted successfully 🎉", "success");
     closePanel();
+    showPostSubmitModal();
   } catch(e) {
-    showToast("Submission failed. Check your connection.","error");
+    showToast("Submission failed. Check your connection.", "error");
   } finally {
-    submitBtn.disabled=false; submitBtn.textContent="Submit Report";
+    submitBtn.disabled = false; submitBtn.textContent = "Submit Report";
   }
 }
 
-function calcUrgencyScore(severity,lat,lng){
-  const w=SEV_WEIGHT[severity]||1;
-  const nearby=allReports.filter(r=>r.status!=="Resolved"&&distMeters(lat,lng,r.lat,r.lng)<=500);
-  return Math.min(w+nearby.length*2,12);
+/* [FIX M-5] Accept explicit reports array for density calculation */
+function calcUrgencyScore(severity, lat, lng, reports) {
+  const w = SEV_WEIGHT[severity] || 1;
+  const nearby = (reports || allReports).filter(r =>
+    r.status !== "Resolved" && distMeters(lat, lng, r.lat, r.lng) <= 500
+  );
+  return Math.min(w + nearby.length*2, 12);
 }
 
-function resetForm(){
-  selectedType=null; photoFile=null; selectedLat=null; selectedLng=null;
-  if(pinMarker){map.removeLayer(pinMarker);pinMarker=null;}
-  document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("selected"));
+function resetForm() {
+  selectedType = null; photoFile = null; selectedLat = null; selectedLng = null;
+  if (pinMarker) { map.removeLayer(pinMarker); pinMarker = null; }
+  document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("selected"));
   document.getElementById("type-error").classList.remove("visible");
   document.getElementById("desc-error").classList.remove("visible");
   document.getElementById("location-error").classList.remove("visible");
-  document.getElementById("issue-desc").value="";
-  document.getElementById("reporter-name").value="";
-  document.getElementById("sev-slider").value="2";
-  document.getElementById("sev-label").textContent="Medium";
-  document.getElementById("sev-label").style.color="";
-  document.getElementById("char-count").textContent="0";
-  setLocStatus("📍 No location set — click map or use GPS",false);
-  document.getElementById("photo-preview").style.display="none";
-  document.getElementById("photo-upload-area").style.display="block";
-  photoInput.value="";
+  document.getElementById("issue-desc").value = "";
+  document.getElementById("reporter-name").value = "";
+  document.getElementById("sev-slider").value = "2";
+  document.getElementById("sev-label").textContent = "Medium";
+  document.getElementById("sev-label").style.color = "";
+  document.getElementById("char-count").textContent = "0";
+  setLocStatus("📍 No location set — click map or use GPS", false);
+  const img = document.getElementById("photo-preview-img");
+  if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  img.src = "";
+  document.getElementById("photo-preview").style.display = "none";
+  document.getElementById("photo-upload-area").style.display = "block";
+  photoInput.value = "";
 }
 
-/* ─── SEED DATA ─── */
+
+/* ═══════════════════════════════════════════════════════════
+   SEED DATA [FIX H-5: WriteBatch for atomic, single-roundtrip writes]
+═══════════════════════════════════════════════════════════ */
 async function seedData() {
-  if(!db){showToast("Can't seed in demo mode — configure Firebase first.","error");return;}
-  const existing=await getDocs(collection(db,"reports"));
-  if(existing.size>=10){const ok=confirm(`There are already ${existing.size} reports.\n\nAdd 30 demo reports anyway?`);if(!ok)return;}
-  showToast("Seeding demo data…","info");
-  const now=Date.now(), DAY=86400000;
-  const SEED=[
+  if (!db) { showToast("Can't seed in demo mode — configure Firebase first.", "error"); return; }
+  const existing = await getDocs(collection(db, "reports"));
+  if (existing.size >= 10) {
+    const ok = confirm(`There are already ${existing.size} reports.\n\nAdd 30 demo reports anyway?`);
+    if (!ok) return;
+  }
+  showToast("Seeding demo data…", "info");
+  const now = Date.now(), DAY = 86400000;
+  const SEED = [
     {type:"Water Leak",lat:7.2095,lng:79.8370,desc:"Pipe burst near market — wasting heavily",daysAgo:14,sev:"High",status:"Open"},
     {type:"Overflow",lat:7.2101,lng:79.8375,desc:"Drain overflowing onto main road",daysAgo:11,sev:"High",status:"Open"},
     {type:"Water Leak",lat:7.2088,lng:79.8365,desc:"Broken junction box, pooling water",daysAgo:9,sev:"Medium",status:"Open"},
@@ -2132,153 +2651,229 @@ async function seedData() {
     {type:"Water Leak",lat:6.9300,lng:79.8550,desc:"Water running from meter constantly",daysAgo:6,sev:"Medium",status:"Resolved"},
     {type:"Illegal Dumping",lat:6.9350,lng:79.8600,desc:"Industrial waste near storm drain",daysAgo:19,sev:"Critical",status:"Resolved"}
   ];
+
   try {
-    for(const s of SEED){
-      const ts=new Date(now-s.daysAgo*DAY);
-      const resolvedAt=s.status==="Resolved"?new Date(ts.getTime()+Math.random()*s.daysAgo*DAY*0.8):null;
-      const w=SEV_WEIGHT[s.sev]||1;
-      await addDoc(collection(db,"reports"),{
-        type:s.type,description:s.desc,lat:s.lat,lng:s.lng,
-        severity:s.sev,status:s.status,timestamp:ts,resolvedAt,
-        reporter:"Demo Data",urgencyScore:Math.min(w+Math.floor(Math.random()*3)*2,12),
-        photoURL:null
+    /* [FIX H-5] Single batch write — 1 round trip instead of 30, atomic */
+    const batch = writeBatch(db);
+    for (const s of SEED) {
+      const ts = new Date(now - s.daysAgo * DAY);
+      const resolvedAt = s.status === "Resolved"
+        ? new Date(ts.getTime() + Math.random() * s.daysAgo * DAY * 0.8)
+        : null;
+      const w = SEV_WEIGHT[s.sev] || 1;
+      const newDocRef = doc(collection(db, "reports"));
+      batch.set(newDocRef, {
+        type: s.type, description: s.desc, lat: s.lat, lng: s.lng,
+        severity: s.sev, status: s.status, timestamp: ts, resolvedAt,
+        reporter: "Demo Data",
+        urgencyScore: Math.min(w + Math.floor(Math.random()*3)*2, 12),
+        photoURL: null
       });
     }
-    showToast("30 demo reports loaded!","success");
-  } catch(e) { showToast("Seed failed: "+e.message,"error"); }
+    await batch.commit();
+    showToast("30 demo reports loaded!", "success");
+  } catch(e) { showToast("Seed failed: " + e.message, "error"); }
 }
 
 document.getElementById("seed-btn-sidebar").addEventListener("click", seedData);
 
+
 /* ─── CSV EXPORT ─── */
-document.getElementById("export-csv-btn").addEventListener("click",()=>{
-  const headers=["ID","Type","Severity","Status","Description","Reporter","Urgency","Lat","Lng","Timestamp"];
-  const rows=allReports.map(r=>[
-    r.id,r.type,r.severity||"",r.status,
+document.getElementById("export-csv-btn").addEventListener("click", () => {
+  const headers = ["ID","Type","Severity","Status","Description","Reporter","Urgency","Lat","Lng","Timestamp"];
+  const rows = allReports.map(r => [
+    r.id, r.type, r.severity||"", r.status,
     `"${(r.description||"").replace(/"/g,'""')}"`,
-    r.reporter||"Anonymous",r.urgencyScore||0,
-    r.lat?.toFixed(6)||"",r.lng?.toFixed(6)||"",
+    r.reporter||"Anonymous", r.urgencyScore||0,
+    r.lat?.toFixed(6)||"", r.lng?.toFixed(6)||"",
     r.timestamp?.toDate?.()?.toISOString()||""
   ]);
-  const csv=[headers,...rows].map(r=>r.join(",")).join("\n");
-  const blob=new Blob([csv],{type:"text/csv"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");a.href=url;a.download=`leakmap-${new Date().toISOString().split("T")[0]}.csv`;a.click();URL.revokeObjectURL(url);
-  showToast(`Exported ${allReports.length} reports as CSV.`,"success");
+  const csv = [headers,...rows].map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type:"text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `leakmap-${new Date().toISOString().split("T")[0]}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast(`Exported ${allReports.length} reports as CSV.`, "success");
 });
 
-/* ─── VIEW SWITCHING ─── */
-document.querySelectorAll(".nav-link[data-view]").forEach(btn=>btn.addEventListener("click",()=>switchView(btn.dataset.view)));
-document.querySelectorAll(".bnav-item[data-view]").forEach(btn=>btn.addEventListener("click",()=>switchView(btn.dataset.view)));
-document.getElementById("sidebar-critical-btn").addEventListener("click",()=>{switchView("reports");setTimeout(()=>{const el=document.getElementById("full-sev-filter");if(el){el.value="Critical";renderFullTable();}},50);});
-document.getElementById("sidebar-unresolved-btn").addEventListener("click",()=>{switchView("reports");setTimeout(()=>{const el=document.getElementById("full-status-filter");if(el){el.value="Open";renderFullTable();}},50);});
+
+/* ═══════════════════════════════════════════════════════════
+   VIEW SWITCHING [FIX M-2: cleanup heatmap context on view switch]
+═══════════════════════════════════════════════════════════ */
+document.querySelectorAll(".nav-link[data-view]").forEach(btn =>
+  btn.addEventListener("click", () => switchView(btn.dataset.view))
+);
+document.querySelectorAll(".bnav-item[data-view]").forEach(btn =>
+  btn.addEventListener("click", () => switchView(btn.dataset.view))
+);
+document.getElementById("sidebar-critical-btn").addEventListener("click", () => {
+  switchView("reports");
+  setTimeout(() => {
+    const el = document.getElementById("full-sev-filter");
+    if (el) { el.value = "Critical"; renderFullTable(); }
+  }, 50);
+});
+document.getElementById("sidebar-unresolved-btn").addEventListener("click", () => {
+  switchView("reports");
+  setTimeout(() => {
+    const el = document.getElementById("full-status-filter");
+    if (el) { el.value = "Open"; renderFullTable(); }
+  }, 50);
+});
 
 function switchView(view) {
-  activeView=view;
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  activeView = view;
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById(`view-${view}`)?.classList.add("active");
-  document.querySelectorAll(".nav-link[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
-  document.querySelectorAll(".bnav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
-  const titles={map:"Live Map",overview:"Overview Dashboard",reports:"All Reports",hotspots:"Hotspot Analysis",ecoscore:"Neighbourhood EcoScore"};
-  document.getElementById("topbar-title").textContent=titles[view]||view;
-  if(view==="map") setTimeout(()=>map.invalidateSize(),50);
-  if(view==="reports") renderFullTable();
-  if(view==="hotspots") renderHotspots();
-  if(view==="ecoscore") renderEcoScore();
+  document.querySelectorAll(".nav-link[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".bnav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  const titles = { map:"Live Map", overview:"Overview Dashboard", reports:"All Reports", hotspots:"Hotspot Analysis", ecoscore:"Neighbourhood EcoScore" };
+  document.getElementById("topbar-title").textContent = titles[view] || view;
+
+  if (view === "map") setTimeout(() => map.invalidateSize(), 50);
+
+  /* Trigger renders for data-dependent views */
+  if (view === "reports") renderFullTable();
+  if (view === "hotspots" || view === "ecoscore") {
+    /* Re-compute with fresh data for these views */
+    const openR = allReports.filter(r => r.status !== "Resolved");
+    const hs = computeHotspotClusters(openR);
+    if (view === "hotspots") renderHotspots(hs);
+    if (view === "ecoscore") renderEcoScore(computeAllNeighborhoods(hs));
+  }
 }
+
 
 /* ─── TABLE SORT ─── */
-document.querySelectorAll("#mini-reports-table th[data-sort]").forEach(th=>th.addEventListener("click",()=>{if(sortField===th.dataset.sort)sortDir=sortDir==="asc"?"desc":"asc";else{sortField=th.dataset.sort;sortDir="desc";}updateSortH("#mini-reports-table",sortField,sortDir);renderMiniTable();}));
-document.querySelectorAll("#full-reports-table th[data-sort]").forEach(th=>th.addEventListener("click",()=>{if(fullSortF===th.dataset.sort)fullSortD=fullSortD==="asc"?"desc":"asc";else{fullSortF=th.dataset.sort;fullSortD="desc";}updateSortH("#full-reports-table",fullSortF,fullSortD);renderFullTable();}));
-function updateSortH(sel,field,dir){document.querySelectorAll(`${sel} th`).forEach(th=>{th.classList.remove("sort-asc","sort-desc");if(th.dataset.sort===field)th.classList.add(dir==="asc"?"sort-asc":"sort-desc");});}
+document.querySelectorAll("#mini-reports-table th[data-sort]").forEach(th =>
+  th.addEventListener("click", () => {
+    if (sortField === th.dataset.sort) sortDir = sortDir === "asc" ? "desc" : "asc";
+    else { sortField = th.dataset.sort; sortDir = "desc"; }
+    updateSortH("#mini-reports-table", sortField, sortDir);
+    renderMiniTable();
+  })
+);
+document.querySelectorAll("#full-reports-table th[data-sort]").forEach(th =>
+  th.addEventListener("click", () => {
+    if (fullSortF === th.dataset.sort) fullSortD = fullSortD === "asc" ? "desc" : "asc";
+    else { fullSortF = th.dataset.sort; fullSortD = "desc"; }
+    updateSortH("#full-reports-table", fullSortF, fullSortD);
+    renderFullTable();
+  })
+);
 
-/* ─── FILTER INPUTS ─── */
-["mini-search","mini-status-filter","mini-type-filter"].forEach(id=>document.getElementById(id)?.addEventListener("input",renderMiniTable));
-["full-search","full-status-filter","full-type-filter","full-sev-filter"].forEach(id=>document.getElementById(id)?.addEventListener("input",()=>{if(activeView==="reports")renderFullTable();}));
+function updateSortH(sel, field, dir) {
+  document.querySelectorAll(`${sel} th`).forEach(th => {
+    th.classList.remove("sort-asc","sort-desc");
+    if (th.dataset.sort === field) th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+  });
+}
+
+
+/* ─── FILTER INPUTS [FIX H-4: debounced search, immediate for dropdowns] ─── */
+/* Overview mini-table: dropdowns fire immediately, search is debounced */
+["mini-status-filter","mini-type-filter"].forEach(id =>
+  document.getElementById(id)?.addEventListener("input", renderMiniTable)
+);
+document.getElementById("mini-search")
+  ?.addEventListener("input", debounce(renderMiniTable, 200));
+
+/* Full reports table: dropdowns fire immediately, search is debounced */
+["full-status-filter","full-type-filter","full-sev-filter"].forEach(id =>
+  document.getElementById(id)?.addEventListener("input", () => {
+    if (activeView === "reports") renderFullTable();
+  })
+);
+document.getElementById("full-search")
+  ?.addEventListener("input", debounce(() => {
+    if (activeView === "reports") renderFullTable();
+  }, 200));
+
 
 /* ─── DATE RANGE ─── */
-document.getElementById("last-7-btn").addEventListener("click",()=>{const to=new Date(),from=new Date(to-7*86400000);document.getElementById("date-from").value=from.toISOString().split("T")[0];document.getElementById("date-to").value=to.toISOString().split("T")[0];renderFullTable();});
-document.getElementById("last-30-btn").addEventListener("click",()=>{const to=new Date(),from=new Date(to-30*86400000);document.getElementById("date-from").value=from.toISOString().split("T")[0];document.getElementById("date-to").value=to.toISOString().split("T")[0];renderFullTable();});
-document.getElementById("date-clear-btn").addEventListener("click",()=>{document.getElementById("date-from").value="";document.getElementById("date-to").value="";renderFullTable();});
-["date-from","date-to"].forEach(id=>document.getElementById(id)?.addEventListener("change",()=>{if(activeView==="reports")renderFullTable();}));
+document.getElementById("last-7-btn").addEventListener("click", () => {
+  const to = new Date(), from = new Date(to-7*86400000);
+  document.getElementById("date-from").value = from.toISOString().split("T")[0];
+  document.getElementById("date-to").value = to.toISOString().split("T")[0];
+  renderFullTable();
+});
+document.getElementById("last-30-btn").addEventListener("click", () => {
+  const to = new Date(), from = new Date(to-30*86400000);
+  document.getElementById("date-from").value = from.toISOString().split("T")[0];
+  document.getElementById("date-to").value = to.toISOString().split("T")[0];
+  renderFullTable();
+});
+document.getElementById("date-clear-btn").addEventListener("click", () => {
+  document.getElementById("date-from").value = "";
+  document.getElementById("date-to").value = "";
+  renderFullTable();
+});
+["date-from","date-to"].forEach(id =>
+  document.getElementById(id)?.addEventListener("change", () => {
+    if (activeView === "reports") renderFullTable();
+  })
+);
+
 
 /* ─── GLOBAL TOOLTIP ─── */
-const globalTip=document.getElementById("global-tip");
-document.addEventListener("mouseover",e=>{const t=e.target.closest("[data-tip]");if(!t)return;globalTip.textContent=t.dataset.tip;globalTip.style.display="block";});
-document.addEventListener("mousemove",e=>{if(globalTip.style.display==="block"){const x=e.clientX+14,y=e.clientY-10;globalTip.style.left=(x+globalTip.offsetWidth>window.innerWidth?x-globalTip.offsetWidth-24:x)+"px";globalTip.style.top=(y+globalTip.offsetHeight>window.innerHeight?y-globalTip.offsetHeight-4:y)+"px";}});
-document.addEventListener("mouseout",e=>{if(!e.relatedTarget?.closest("[data-tip]")){globalTip.style.display="none";}});
+const globalTip = document.getElementById("global-tip");
+document.addEventListener("mouseover", e => {
+  const t = e.target.closest("[data-tip]");
+  if (!t) return;
+  globalTip.textContent = t.dataset.tip;
+  globalTip.style.display = "block";
+});
+document.addEventListener("mousemove", e => {
+  if (globalTip.style.display === "block") {
+    const x = e.clientX + 14, y = e.clientY - 10;
+    globalTip.style.left = (x + globalTip.offsetWidth > window.innerWidth ? x - globalTip.offsetWidth - 24 : x) + "px";
+    globalTip.style.top = (y + globalTip.offsetHeight > window.innerHeight ? y - globalTip.offsetHeight - 4 : y) + "px";
+  }
+});
+document.addEventListener("mouseout", e => {
+  if (!e.relatedTarget?.closest("[data-tip]")) { globalTip.style.display = "none"; }
+});
+
+
+/* [FIX C-2/L-5] Event delegation for flyToCluster — handles hotspot & ecoscore view-map buttons */
+document.addEventListener("click", e => {
+  const flyBtn = e.target.closest("[data-action='fly']");
+  if (!flyBtn) return;
+  const lat = parseFloat(flyBtn.dataset.lat);
+  const lng = parseFloat(flyBtn.dataset.lng);
+  if (!isNaN(lat) && !isNaN(lng)) flyToCluster(lat, lng);
+});
+
 
 /* ─── TOPBAR SUB ─── */
-function updateTopbarSub(){const el=document.getElementById("topbar-sub");if(!el)return;const open=allReports.filter(r=>r.status!=="Resolved").length;el.textContent=`${allReports.length} total reports · ${open} open · ${isConfigured?"Live":"Demo"} mode`;}
-
-/* ─── HELPERS ─── */
-function computeHotspotClusters(reports){
-  const visited=new Set(),clusters=[];
-  for(let i=0;i<reports.length;i++){
-    if(visited.has(i))continue;
-    const group=[i];visited.add(i);
-    for(let j=i+1;j<reports.length;j++){
-      if(visited.has(j))continue;
-      if(distMeters(reports[i].lat,reports[i].lng,reports[j].lat,reports[j].lng)<=500){group.push(j);visited.add(j);}
-    }
-    if(group.length>=3){
-      const members=group.map(idx=>reports[idx]);
-      clusters.push({count:members.length,center:{lat:members.reduce((s,r)=>s+r.lat,0)/members.length,lng:members.reduce((s,r)=>s+r.lng,0)/members.length},types:[...new Set(members.map(r=>r.type))]});
-    }
-  }
-  return clusters.sort((a,b)=>b.count-a.count);
+function updateTopbarSub() {
+  const el = document.getElementById("topbar-sub"); if (!el) return;
+  const open = allReports.filter(r => r.status !== "Resolved").length;
+  el.textContent = `${allReports.length} total reports · ${open} open · ${isConfigured ? (isOnline ? "Live" : "Offline") : "Demo"} mode`;
 }
 
-function filterReports(reports,search,status,type,severity){
-  return reports.filter(r=>{
-    if(status!=="all"&&r.status!==status) return false;
-    if(type!=="all"&&r.type!==type) return false;
-    if(severity!=="all"&&r.severity!==severity) return false;
-    if(search){const blob=`${r.type} ${r.description} ${r.reporter} ${r.status}`.toLowerCase();if(!blob.includes(search))return false;}
-    return true;
+/* ─── FIX 2: Post-submit modal ─── */
+function showPostSubmitModal() {
+  document.getElementById("post-submit-modal")?.classList.add("visible");
+}
+document.getElementById("modal-close-btn")?.addEventListener("click", () => {
+  document.getElementById("post-submit-modal")?.classList.remove("visible");
+});
+document.getElementById("post-submit-modal")?.addEventListener("click", e => {
+  if (e.target === e.currentTarget) document.getElementById("post-submit-modal")?.classList.remove("visible");
+});
+
+/* ─── FIX 4: How It Works banner dismiss ─── */
+(function() {
+  const banner = document.getElementById("how-it-works");
+  const dismissBtn = document.getElementById("hiw-dismiss");
+  if (localStorage.getItem("hiw-dismissed")) { banner?.classList.add("dismissed"); }
+  dismissBtn?.addEventListener("click", () => {
+    banner?.classList.add("dismissed");
+    localStorage.setItem("hiw-dismissed", "1");
   });
-}
-
-function sortRows(reports,field,dir){
-  return [...reports].sort((a,b)=>{
-    let av=a[field],bv=b[field];
-    if(field==="timestamp"){av=a.timestamp?.seconds||0;bv=b.timestamp?.seconds||0;}
-    if(typeof av==="string"){av=av.toLowerCase();bv=bv.toLowerCase();}
-    if(av<bv)return dir==="asc"?-1:1; if(av>bv)return dir==="asc"?1:-1; return 0;
-  });
-}
-
-function calcWaterSaved(){return allReports.filter(r=>r.status==="Resolved").reduce((t,r)=>t+(WATER_SAVED_L[r.type]||500),0);}
-function fmtWater(l){if(l>=1e6)return`${(l/1e6).toFixed(1)} ML`;if(l>=1000)return`${(l/1000).toFixed(1)} kL`;return`${l.toLocaleString()} L`;}
-
-function distMeters(lat1,lng1,lat2,lng2){
-  const R=6371000,φ1=lat1*Math.PI/180,φ2=lat2*Math.PI/180;
-  const Δφ=(lat2-lat1)*Math.PI/180,Δλ=(lng2-lng1)*Math.PI/180;
-  const a=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-function formatTimeAgo(date){
-  if(!date)return"—";const s=(Date.now()-date.getTime())/1000;
-  if(s<60)return"just now";if(s<3600)return`${Math.floor(s/60)}m ago`;
-  if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;
-  return date.toLocaleDateString("en-US",{month:"short",day:"numeric"});
-}
-
-function esc(str){return String(str??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-function lower(s){return s.toLowerCase();}
-function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
-function hideLoader(){setTimeout(()=>document.getElementById("loading-overlay")?.classList.add("hidden"),600);}
-
-function showToast(msg,type="info"){
-  const c=document.getElementById("toast-container");
-  const icons={success:"✅",error:"❌",info:"ℹ️",warning:"⚠️"};
-  const t=document.createElement("div");
-  t.className=`toast ${type}`;
-  t.innerHTML=`<span>${icons[type]||"ℹ️"}</span><span>${esc(msg)}</span>`;
-  c.appendChild(t);
-  setTimeout(()=>{t.classList.add("exiting");setTimeout(()=>t.remove(),300);},3500);
-}
+})();
 
 </script>
 </body>

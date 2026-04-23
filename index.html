@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeakMap v3 — Water Waste Reporter</title>
+  <meta name="description" content="Community water waste reporting. Real-time map, analytics and accountability." />
+
+  <!-- FONTS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- LEAFLET -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- CHART.JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════
+       CSS VARIABLES — v3 palette (dark navy + cyan accent)
+    ═══════════════════════════════════════════════════════════ */
+    :root {
+      --bg:          #0A0F1E;
+      --surface:     #111827;
+      --surface2:    #1E293B;
+      --surface3:    #243044;
+      --border:      rgba(255,255,255,0.07);
+      --border2:     rgba(255,255,255,0.14);
+      --accent:      #0A7EA4;
+      --accent-bright: #0d95c4;
+      --accent-glow: rgba(10,126,164,0.2);
+      --success:     #2A9D8F;
+      --warning:     #F4A261;
+      --danger:      #E63946;
+      --critical:    #DC2626;
+      --text:        #E8F4F8;
+      --muted:       #64748B;
+      --subtle:      #94A3B8;
+      --radius:      10px;
+      --radius-lg:   16px;
+      --shadow:      0 4px 24px rgba(0,0,0,0.5);
+      --shadow-lg:   0 8px 40px rgba(0,0,0,0.7);
+      --font-mono:   'Space Mono', monospace;
+      --font-body:   'Syne', system-ui, sans-serif;
+      --sidebar-w:   232px;
+      --transition:  0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --panel-width: 420px;
+      --bnav-h:      62px;
+
+      /* Issue type colours */
+      --c-leak:      #0A7EA4;
+      --c-pollution: #E63946;
+      --c-drytap:    #F4A261;
+      --c-dumping:   #9333EA;
+      --c-overflow:  #2A9D8F;
+      --c-contam:    #F97316;
+      --c-other:     #6B7280;
+
+      /* EcoScore grade colours */
+      --grade-healthy:  #2A9D8F;
+      --grade-moderate: #d4ac0d;
+      --grade-risk:     #F4A261;
+      --grade-critical: #E63946;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* ════════════════ SHELL ════════════════ */
+    #shell { display: flex; height: 100vh; }
+
+    /* ════════════════ SIDEBAR ════════════════ */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0 20px;
+      z-index: 10;
+    }
+
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 18px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent); border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .sidebar-logo .logo-text {
+      font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--text);
+    }
+    .sidebar-logo .logo-text span { color: var(--accent-bright); }
+
+    .sidebar-badge {
+      font-size: 8px; background: rgba(10,126,164,0.2); color: var(--accent-bright);
+      border: 1px solid rgba(10,126,164,0.3); padding: 1px 6px;
+      border-radius: 4px; font-family: var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-left: auto;
+    }
+
+    .sidebar-section { padding: 16px 10px 0; }
+    .sidebar-section-label {
+      font-size: 9px; font-family: var(--font-mono); letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--muted); padding: 0 8px; margin-bottom: 5px;
+    }
+
+    .nav-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; color: var(--subtle);
+      cursor: pointer; transition: all 0.15s ease;
+      text-decoration: none; border: none; background: none;
+      width: 100%; text-align: left; font-family: var(--font-body);
+    }
+    .nav-link:hover { background: var(--surface2); color: var(--text); }
+    .nav-link.active {
+      background: var(--accent-glow); color: var(--accent-bright);
+      border: 1px solid rgba(10,126,164,0.25);
+    }
+    .nav-link .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .nav-link .nav-badge {
+      margin-left: auto; font-family: var(--font-mono); font-size: 10px;
+      background: var(--surface2); color: var(--subtle);
+      padding: 1px 6px; border-radius: 4px; min-width: 22px; text-align: center;
+    }
+    .nav-link.active .nav-badge { background: rgba(10,126,164,0.3); color: var(--accent-bright); }
+
+    .sidebar-spacer { flex: 1; }
+
+    .sidebar-footer { padding: 14px 18px 0; border-top: 1px solid var(--border); }
+    .sidebar-footer p { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+
+    .live-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--success); margin-right: 5px;
+      animation: livePulse 2s ease infinite;
+    }
+    @keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    /* ════════════════ MAIN + TOPBAR ════════════════ */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .topbar-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+    .topbar-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: var(--radius);
+      font-size: 12px; font-weight: 600; font-family: var(--font-body);
+      cursor: pointer; transition: all 0.15s ease;
+      border: 1px solid transparent; outline: none; white-space: nowrap;
+    }
+    .btn-outline {
+      background: transparent; border-color: var(--border2); color: var(--subtle);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent-bright); background: var(--accent-glow); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-bright); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ════════════════ VIEWS ════════════════ */
+    #content { flex: 1; overflow: hidden; position: relative; }
+    .view { display: none; height: 100%; }
+    .view.active { display: block; height: 100%; }
+    #view-overview.active, #view-reports.active, #view-hotspots.active, #view-ecoscore.active {
+      overflow-y: auto; padding: 24px 28px;
+      scrollbar-width: thin; scrollbar-color: var(--surface2) transparent;
+    }
+
+    /* ════════════════ MAP VIEW ════════════════ */
+    #view-map { position: relative; overflow: hidden; }
+    #map { position: absolute; inset: 0; z-index: 1; background: #0d1117; }
+
+    #map-top-bar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      background: linear-gradient(180deg, rgba(10,15,30,0.96) 0%, rgba(10,15,30,0.0) 100%);
+      backdrop-filter: blur(2px); pointer-events: none;
+    }
+    #filter-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; pointer-events: auto; }
+
+    .filter-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(17,24,39,0.88); color: var(--subtle);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s ease; white-space: nowrap;
+      backdrop-filter: blur(8px); font-family: var(--font-body);
+    }
+    .filter-pill:hover { border-color: var(--accent); color: var(--text); }
+    .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .filter-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .pill-count {
+      background: rgba(255,255,255,0.15); border-radius: 10px;
+      padding: 1px 5px; font-size: 10px; font-family: var(--font-mono);
+      min-width: 18px; text-align: center; line-height: 1.4;
+    }
+    .filter-pill.active .pill-count { background: rgba(255,255,255,0.28); }
+
+    .heatmap-toggle {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(17,24,39,0.88); color: var(--subtle);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s ease; white-space: nowrap;
+      backdrop-filter: blur(8px); font-family: var(--font-body); pointer-events: auto;
+    }
+    .heatmap-toggle:hover { border-color: #F97316; color: #F97316; }
+    .heatmap-toggle.active { background: rgba(249,115,22,0.85); border-color: #F97316; color: #fff; }
+
+    .resolved-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(17,24,39,0.88); color: var(--subtle);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s ease; white-space: nowrap;
+      backdrop-filter: blur(8px); font-family: var(--font-body); user-select: none;
+      pointer-events: auto;
+    }
+    .resolved-toggle.active { border-color: var(--success); color: var(--success); }
+    .resolved-toggle input[type="checkbox"] { display: none; }
+
+    /* Stats panel */
+    #stats-panel {
+      position: absolute; top: 68px; left: 16px; z-index: 100;
+      background: rgba(17,24,39,0.93); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px 18px;
+      min-width: 200px; backdrop-filter: blur(14px);
+      box-shadow: var(--shadow); transition: var(--transition);
+    }
+    #stats-panel.collapsed {
+      min-width: 0; padding: 10px; width: 42px; height: 42px;
+      overflow: hidden; border-radius: 50%; cursor: pointer;
+    }
+    #stats-panel.collapsed .stats-content { display: none; }
+    #stats-panel.collapsed .stats-icon { display: flex !important; }
+    .stats-icon { display: none; width: 22px; height: 22px; align-items: center; justify-content: center; font-size: 16px; }
+    .stats-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .stat-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 4px 0; }
+    .stat-label { font-size: 12px; color: var(--subtle); display: flex; align-items: center; gap: 6px; }
+    .stat-value { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--text); }
+    .stat-value.sm { font-size: 12px; }
+    .stat-value.pulse { animation: numPulse 0.4s ease; }
+    @keyframes numPulse {
+      0%   { transform: scale(1);    color: var(--accent-bright); }
+      50%  { transform: scale(1.25); color: var(--accent-bright); }
+      100% { transform: scale(1);    color: var(--text); }
+    }
+
+    /* FAB */
+    #report-btn {
+      position: absolute; bottom: 28px; right: 24px; z-index: 200;
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 22px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 50px;
+      font-family: var(--font-body); font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(10,126,164,0.5), var(--shadow);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    #report-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(10,126,164,0.7), var(--shadow); }
+    #report-btn:active { transform: scale(0.97); }
+    #report-btn::before {
+      content: ''; position: absolute; inset: -4px; border-radius: 54px;
+      border: 2px solid rgba(10,126,164,0.4);
+      animation: ripplePulse 2.5s ease-out infinite;
+    }
+    @keyframes ripplePulse {
+      0%   { transform: scale(1);    opacity: 0.8; }
+      70%  { transform: scale(1.25); opacity: 0; }
+      100% { opacity: 0; }
+    }
+
+    #pin-mode-hint {
+      position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+      z-index: 250;
+      background: var(--surface); border: 1px solid var(--accent); color: var(--text);
+      font-size: 13px; padding: 10px 20px; border-radius: 40px;
+      pointer-events: none; opacity: 0; transition: opacity 0.2s ease; white-space: nowrap;
+    }
+    #pin-mode-hint.visible { opacity: 1; }
+
+    /* Report form panel (slide-in from right) */
+    #report-panel {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: var(--panel-width); z-index: 300;
+      background: var(--surface); border-left: 1px solid var(--border);
+      box-shadow: -8px 0 40px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column;
+      transform: translateX(100%); transition: transform var(--transition); overflow: hidden;
+    }
+    #report-panel.open { transform: translateX(0); }
+
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .panel-header h2 { font-size: 16px; font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+    .panel-close {
+      width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--subtle); font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; line-height: 1;
+    }
+    .panel-close:hover { background: rgba(230,57,70,0.15); color: var(--danger); border-color: var(--danger); }
+
+    .panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+    .panel-footer { padding: 16px 24px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+    /* Form elements */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .form-label .required { color: var(--danger); }
+    .form-label .optional { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 10px; }
+    .form-control {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: var(--radius); color: var(--text);
+      font-family: var(--font-body); font-size: 13px; padding: 10px 12px;
+      transition: border-color 0.15s; outline: none;
+    }
+    .form-control:focus { border-color: var(--accent); }
+    .form-control.error { border-color: var(--danger) !important; }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    select.form-control { cursor: pointer; }
+
+    /* Type selector grid (from v1) */
+    .type-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .type-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 6px; border-radius: var(--radius);
+      border: 1px solid var(--border2); background: var(--surface2);
+      color: var(--subtle); cursor: pointer; transition: all 0.15s ease;
+      font-family: var(--font-body); font-size: 11px; font-weight: 600;
+    }
+    .type-btn:hover { border-color: var(--accent); color: var(--text); }
+    .type-btn.selected { border-color: var(--accent-bright); background: var(--accent-glow); color: var(--accent-bright); }
+    .type-btn .t-icon { font-size: 18px; }
+    .type-btn .t-score { font-size: 9px; color: var(--muted); font-family: var(--font-mono); margin-top: 1px; }
+    .type-btn.selected .t-score { color: var(--accent-bright); }
+
+    /* Severity slider */
+    .sev-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .sev-slider {
+      flex: 1; -webkit-appearance: none; height: 4px;
+      background: var(--surface2); border-radius: 2px; outline: none;
+    }
+    .sev-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--surface); cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sev-hints { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+    .sev-label { font-size: 12px; font-weight: 700; color: var(--accent-bright); min-width: 70px; text-align: right; }
+
+    /* Location area */
+    .location-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .btn-form {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 12px; border-radius: var(--radius);
+      font-size: 11px; font-weight: 600; font-family: var(--font-body);
+      cursor: pointer; transition: all 0.15s; border: 1px solid var(--border2);
+    }
+    .btn-form.outline { background: transparent; color: var(--subtle); }
+    .btn-form.outline:hover { border-color: var(--accent); color: var(--accent-bright); }
+    .btn-form.outline.active { border-color: var(--warning); color: var(--warning); }
+    .btn-form.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-form.primary:hover { background: var(--accent-bright); }
+    .btn-form.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    #location-status {
+      font-size: 11px; color: var(--muted); padding: 8px 12px;
+      background: var(--surface2); border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    #location-status.has-location { color: var(--success); border-color: rgba(42,157,143,0.4); }
+    #location-status.error { color: var(--danger); border-color: rgba(230,57,70,0.4); }
+
+    /* Photo upload */
+    .photo-upload-area {
+      border: 2px dashed var(--border2); border-radius: var(--radius);
+      padding: 20px; text-align: center; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .photo-upload-area:hover { border-color: var(--accent); }
+    .upload-icon { font-size: 24px; margin-bottom: 6px; }
+    .upload-text { font-size: 11px; color: var(--muted); }
+    #photo-preview { display: none; position: relative; margin-top: 8px; }
+    #photo-preview-img { width: 100%; max-height: 140px; object-fit: cover; border-radius: var(--radius); display: block; }
+    .remove-photo {
+      position: absolute; top: 6px; right: 6px;
+      background: rgba(0,0,0,0.6); border: 1px solid var(--border2);
+      color: var(--text); width: 24px; height: 24px; border-radius: 50%;
+      font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+
+    .form-error-msg {
+      font-size: 11px; color: var(--danger); margin-top: 4px;
+      display: none;
+    }
+    .form-error-msg.visible { display: block; }
+
+    .char-counter { font-size: 10px; color: var(--muted); font-family: var(--font-mono); text-align: right; margin-top: 4px; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ════════════════ OVERVIEW VIEW ════════════════ */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+    }
+    .section-title { font-size: 16px; font-weight: 700; font-family: var(--font-mono); color: var(--text); }
+    .section-meta { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 12px; margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px;
+      border-top: 3px solid var(--kpi-color, var(--muted));
+      transition: border-color var(--transition);
+    }
+    .kpi-icon { font-size: 20px; margin-bottom: 8px; }
+    .kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+    .kpi-value { font-size: 28px; font-weight: 700; font-family: var(--font-mono); color: var(--kpi-color, var(--text)); line-height: 1; }
+    .kpi-value.sm-val { font-size: 18px; }
+    .kpi-delta { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+    .chart-grid {
+      display: grid; grid-template-columns: 1fr 2fr 1fr;
+      gap: 14px; margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+    }
+    .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .chart-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .chart-meta { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+    .chart-canvas-wrap { position: relative; }
+    .chart-legend { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-label { color: var(--subtle); flex: 1; }
+    .legend-count { font-family: var(--font-mono); font-size: 11px; color: var(--text); font-weight: 700; }
+    .legend-pct { color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+
+    .bottom-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 20px; }
+
+    /* Tables */
+    .table-card, .full-table-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .table-toolbar {
+      display: flex; align-items: center; gap: 8px; padding: 14px 16px;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .table-toolbar-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .table-toolbar-spacer { flex: 1; }
+    .table-search {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: var(--radius); color: var(--text);
+      font-family: var(--font-body); font-size: 12px;
+      padding: 6px 10px; outline: none; transition: border-color 0.15s;
+      width: 160px;
+    }
+    .table-search:focus { border-color: var(--accent); }
+    .table-filter-select {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: var(--radius); color: var(--subtle);
+      font-family: var(--font-body); font-size: 11px;
+      padding: 6px 8px; outline: none; cursor: pointer;
+    }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th {
+      padding: 10px 12px; text-align: left;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); border-bottom: 1px solid var(--border);
+      background: var(--surface2); white-space: nowrap; cursor: pointer; user-select: none;
+    }
+    thead th:hover { color: var(--text); }
+    thead th.sort-asc::after { content: ' ↑'; }
+    thead th.sort-desc::after { content: ' ↓'; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    tbody tr:last-child { border-bottom: none; }
+    td { padding: 9px 12px; vertical-align: middle; color: var(--subtle); }
+    .table-empty { text-align: center; padding: 32px; color: var(--muted); font-size: 12px; }
+
+    /* Badges */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap;
+      text-transform: capitalize;
+    }
+    .badge-open         { background: rgba(244,162,97,0.2); color: var(--warning); border: 1px solid rgba(244,162,97,0.3); }
+    .badge-in-progress  { background: rgba(59,130,246,0.2); color: #60A5FA; border: 1px solid rgba(59,130,246,0.3); }
+    .badge-resolved     { background: rgba(42,157,143,0.2); color: var(--success); border: 1px solid rgba(42,157,143,0.3); }
+    .badge-low          { background: rgba(100,116,139,0.2); color: var(--muted); border: 1px solid rgba(100,116,139,0.3); }
+    .badge-medium       { background: rgba(244,162,97,0.2); color: var(--warning); border: 1px solid rgba(244,162,97,0.3); }
+    .badge-high         { background: rgba(230,57,70,0.15); color: var(--danger); border: 1px solid rgba(230,57,70,0.3); }
+    .badge-critical     { background: rgba(220,38,38,0.2); color: #FC4848; border: 1px solid rgba(220,38,38,0.4); }
+    .badge-minor        { background: rgba(100,116,139,0.2); color: var(--muted); border: 1px solid rgba(100,116,139,0.3); }
+    .badge-moderate     { background: rgba(244,162,97,0.2); color: var(--warning); border: 1px solid rgba(244,162,97,0.3); }
+    .badge-severe       { background: rgba(230,57,70,0.15); color: var(--danger); border: 1px solid rgba(230,57,70,0.3); }
+
+    .td-type { display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; }
+    .type-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Urgency bar */
+    .urgency-bar { display: flex; align-items: center; gap: 6px; }
+    .urgency-pip { height: 4px; border-radius: 2px; flex-shrink: 0; }
+    .urgency-info { font-size: 12px; cursor: help; opacity: 0.6; }
+
+    /* Action buttons */
+    .action-btn {
+      padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700;
+      cursor: pointer; border: 1px solid; transition: all 0.15s; white-space: nowrap;
+      font-family: var(--font-body);
+    }
+    .action-progress { background: rgba(59,130,246,0.1); color: #60A5FA; border-color: rgba(59,130,246,0.3); }
+    .action-progress:hover { background: rgba(59,130,246,0.2); }
+    .action-resolve  { background: rgba(42,157,143,0.1); color: var(--success); border-color: rgba(42,157,143,0.3); }
+    .action-resolve:hover  { background: rgba(42,157,143,0.2); }
+    .action-reopen   { background: rgba(100,116,139,0.1); color: var(--muted); border-color: rgba(100,116,139,0.3); }
+    .action-reopen:hover   { background: rgba(100,116,139,0.2); }
+
+    /* Activity feed */
+    .activity-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .activity-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+    }
+    .activity-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .activity-list { overflow-y: auto; max-height: 340px; }
+    .activity-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .activity-body { flex: 1; min-width: 0; }
+    .activity-type { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .activity-desc { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-time { font-size: 10px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px; }
+
+    /* Date range */
+    .date-range-label { font-size: 11px; color: var(--muted); align-self: center; }
+    .date-input {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: var(--radius); color: var(--text);
+      font-family: var(--font-body); font-size: 11px; padding: 6px 8px; outline: none;
+      color-scheme: dark;
+    }
+    .date-quick-btn {
+      padding: 6px 10px; border-radius: var(--radius);
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--subtle); font-size: 11px; cursor: pointer; font-family: var(--font-body);
+      transition: all 0.15s;
+    }
+    .date-quick-btn:hover { border-color: var(--accent); color: var(--accent-bright); }
+
+    /* ════════════════ HOTSPOT VIEW ════════════════ */
+    .hotspot-list { display: flex; flex-direction: column; gap: 6px; }
+    .hotspot-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); gap: 12px;
+    }
+    .hotspot-loc { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .hotspot-count {
+      font-family: var(--font-mono); font-size: 18px; font-weight: 700;
+      color: var(--danger); flex-shrink: 0;
+    }
+
+    /* ════════════════ ECOSCORE VIEW ════════════════ */
+    .ecoscore-intro {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;
+    }
+    .ecoscore-intro p { font-size: 13px; color: var(--subtle); line-height: 1.6; }
+    .formula-box {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 14px 18px; margin-top: 14px;
+    }
+    .formula-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .formula { font-family: var(--font-mono); font-size: 11px; color: var(--accent-bright); line-height: 1.7; }
+
+    .nb-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px; margin-bottom: 24px;
+    }
+    .nb-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px;
+      border-left: 3px solid var(--grade-color, var(--muted));
+    }
+    .grade-healthy  { --grade-color: var(--grade-healthy);  }
+    .grade-moderate { --grade-color: var(--grade-moderate); }
+    .grade-risk     { --grade-color: var(--grade-risk);     }
+    .grade-critical { --grade-color: var(--grade-critical); }
+
+    .nb-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .nb-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .nb-grade-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--grade-color, var(--muted)); margin-top: 2px; }
+    .nb-score-num { font-size: 28px; font-weight: 700; font-family: var(--font-mono); color: var(--grade-color, var(--text)); line-height: 1; }
+    .nb-score-sub { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+    .nb-progress-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-bottom: 12px; overflow: hidden; }
+    .nb-progress-fill { height: 100%; background: var(--grade-color, var(--accent)); border-radius: 2px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+    .nb-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-bottom: 10px; }
+    .nb-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .nb-stat-val { font-size: 16px; font-weight: 700; font-family: var(--font-mono); color: var(--text); line-height: 1; }
+    .nb-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .nb-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 10px; border-top: 1px solid var(--border); gap: 8px;
+    }
+    .btn-view-map {
+      font-size: 10px; font-weight: 700; color: var(--accent-bright);
+      text-decoration: none; padding: 3px 8px;
+      border: 1px solid rgba(10,126,164,0.3); border-radius: 20px;
+      transition: all var(--transition); white-space: nowrap;
+    }
+    .btn-view-map:hover { background: var(--accent-glow); border-color: var(--accent); }
+
+    .legend-card-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }
+    .legend-grade-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-top: 3px solid var(--grade-color, var(--muted));
+      border-radius: var(--radius-lg); padding: 12px;
+    }
+    .legend-grade-score { font-size: 18px; font-weight: 700; font-family: var(--font-mono); color: var(--grade-color, var(--text)); }
+    .legend-grade-label { font-size: 12px; font-weight: 600; color: var(--text); margin-top: 2px; }
+    .legend-grade-desc { font-size: 10px; color: var(--muted); line-height: 1.4; margin-top: 4px; }
+
+    /* ════════════════ POPUP ════════════════ */
+    .lm-popup .leaflet-popup-content-wrapper {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+      padding: 0; overflow: hidden; max-width: 280px;
+    }
+    .lm-popup .leaflet-popup-content { margin: 0; }
+    .lm-popup .leaflet-popup-tip { background: var(--surface); }
+    .popup-inner { padding: 0; }
+    .popup-photo { width: 100%; height: 100px; object-fit: cover; display: block; }
+    .popup-body { padding: 12px 14px 10px; }
+    .popup-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
+    .popup-type { font-size: 13px; font-weight: 700; }
+    .popup-desc { font-size: 11px; color: var(--subtle); margin-bottom: 8px; line-height: 1.5; }
+    .popup-meta { display: flex; gap: 10px; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+    .popup-urgency { font-size: 11px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 4px; }
+    .popup-actions { display: flex; gap: 6px; }
+    .btn-resolve {
+      flex: 1; padding: 6px 10px; border-radius: var(--radius);
+      background: rgba(42,157,143,0.2); border: 1px solid rgba(42,157,143,0.4);
+      color: var(--success); font-size: 11px; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; font-family: var(--font-body);
+    }
+    .btn-resolve:hover { background: rgba(42,157,143,0.35); }
+    .btn-close-popup {
+      padding: 6px 8px; border-radius: var(--radius);
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-close-popup:hover { background: var(--surface2); color: var(--text); }
+
+    /* Marker cluster */
+    .leaflet-cluster-anim .leaflet-marker-icon, .leaflet-cluster-anim .leaflet-marker-shadow { transition: transform 0.3s ease-out, opacity 0.3s ease-in; }
+    .marker-cluster div {
+      width: 36px; height: 36px; margin: 2px;
+      background: rgba(10,126,164,0.85); border: 2px solid rgba(10,126,164,0.5);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: #fff;
+    }
+
+    /* ════════════════ GLOBAL TOOLTIP ════════════════ */
+    #global-tip {
+      position: fixed; display: none; z-index: 9999;
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--text); font-size: 11px; padding: 5px 10px;
+      border-radius: 6px; pointer-events: none; max-width: 260px;
+      line-height: 1.4; box-shadow: var(--shadow);
+    }
+
+    /* ════════════════ TOAST ════════════════ */
+    #toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 5000;
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px; border-radius: var(--radius-lg);
+      font-size: 12px; font-weight: 600; color: #fff;
+      backdrop-filter: blur(12px); box-shadow: var(--shadow-lg);
+      animation: toastIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+      pointer-events: auto; max-width: 320px;
+    }
+    .toast.exiting { animation: toastOut 0.25s ease forwards; }
+    .toast.success { background: rgba(42,157,143,0.92); }
+    .toast.error   { background: rgba(230,57,70,0.92); }
+    .toast.info    { background: rgba(10,126,164,0.92); }
+    .toast.warning { background: rgba(244,162,97,0.92); }
+    @keyframes toastIn  { from { opacity:0; transform: translateY(10px) scale(0.94); } to { opacity:1; transform: none; } }
+    @keyframes toastOut { to { opacity:0; transform: translateY(10px) scale(0.9); } }
+
+    /* ════════════════ LOADING OVERLAY ════════════════ */
+    #loading-overlay {
+      position: fixed; inset: 0; background: var(--bg); z-index: 9000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; transition: opacity 0.4s ease;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .loader-logo { font-family: var(--font-mono); font-size: 28px; font-weight: 700; }
+    .loader-logo span { color: var(--accent-bright); }
+    .loader-bar { width: 180px; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .loader-bar::after {
+      content: ''; display: block; height: 100%; width: 60%;
+      background: var(--accent); border-radius: 2px; animation: loaderSlide 1.2s ease-in-out infinite;
+    }
+    @keyframes loaderSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(240%); } }
+    .loader-status { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+    /* ════════════════ MOBILE BOTTOM NAV ════════════════ */
+    #bottom-nav {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: var(--bnav-h); z-index: 180;
+      background: var(--surface); border-top: 1px solid var(--border);
+      align-items: center; justify-content: space-around;
+      padding: 0 4px;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    }
+    .bnav-item {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 6px 12px; border: none; background: transparent;
+      color: var(--muted); cursor: pointer; transition: color 0.15s;
+      border-radius: var(--radius); flex: 1; min-width: 0; font-family: var(--font-body);
+    }
+    .bnav-item:hover { color: var(--text); }
+    .bnav-item.active { color: var(--accent-bright); }
+    .bnav-icon { font-size: 20px; line-height: 1; }
+    .bnav-label { font-size: 9px; font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+
+    /* ════════════════ RESPONSIVE ════════════════ */
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .chart-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 900px) {
+      #sidebar { display: none; }
+      #bottom-nav { display: flex; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .chart-grid { grid-template-columns: 1fr; }
+      .bottom-grid { grid-template-columns: 1fr; }
+      #view-overview.active, #view-reports.active, #view-hotspots.active, #view-ecoscore.active {
+        padding-bottom: calc(var(--bnav-h) + 20px);
+      }
+      #report-btn { position: fixed; bottom: calc(var(--bnav-h) + 16px); right: 20px; }
+      #pin-mode-hint { bottom: calc(var(--bnav-h) + 56px); }
+      #toast-container { bottom: calc(var(--bnav-h) + 8px); }
+    }
+    @media (max-width: 600px) {
+      :root { --panel-width: 100vw; }
+      #report-panel { border-left: none; border-top: 1px solid var(--border); top: auto; height: 92vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; transform: translateY(100%); }
+      #report-panel.open { transform: translateY(0); }
+      #stats-panel { top: 68px; min-width: 0; padding: 10px; width: 42px; height: 42px; overflow: hidden; border-radius: 50%; }
+      #stats-panel .stats-content { display: none; }
+      #stats-panel .stats-icon { display: flex !important; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .topbar-actions .btn-outline { display: none; }
+      .legend-card-grid { grid-template-columns: 1fr 1fr; }
+      .nb-grid { grid-template-columns: 1fr; }
+    }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- GLOBAL TOOLTIP -->
+<div id="global-tip"></div>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="loader-logo">Leak<span>Map</span></div>
+  <div class="loader-bar"></div>
+  <div class="loader-status" id="loader-status">Connecting to Firebase…</div>
+</div>
+
+<!-- APP SHELL -->
+<div id="shell">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">💧</div>
+      <div class="logo-text">Leak<span>Map</span></div>
+      <div class="sidebar-badge">v3</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Navigation</div>
+      <button class="nav-link active" data-view="map">
+        <span class="nav-icon">🗺️</span> Live Map
+      </button>
+      <button class="nav-link" data-view="overview">
+        <span class="nav-icon">📊</span> Overview
+        <span class="nav-badge" id="nav-badge-overview">—</span>
+      </button>
+      <button class="nav-link" data-view="reports">
+        <span class="nav-icon">📋</span> All Reports
+        <span class="nav-badge" id="nav-badge-reports">0</span>
+      </button>
+      <button class="nav-link" data-view="hotspots">
+        <span class="nav-icon">🔥</span> Hotspots
+        <span class="nav-badge" id="nav-badge-hotspots">0</span>
+      </button>
+      <button class="nav-link" data-view="ecoscore">
+        <span class="nav-icon">🌿</span> EcoScore
+      </button>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:8px;">
+      <div class="sidebar-section-label">Quick Filters</div>
+      <button class="nav-link" id="sidebar-critical-btn">
+        <span class="nav-icon">🚨</span> Critical Only
+        <span class="nav-badge" id="nav-badge-critical">0</span>
+      </button>
+      <button class="nav-link" id="sidebar-unresolved-btn">
+        <span class="nav-icon">⏳</span> Unresolved
+        <span class="nav-badge" id="nav-badge-unresolved">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:8px;">
+      <div class="sidebar-section-label">Data</div>
+      <button class="nav-link" id="seed-btn-sidebar">
+        <span class="nav-icon">🌱</span> Load Demo Data
+      </button>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-footer">
+      <p><span class="live-dot"></span>Live · Real-time sync</p>
+      <p style="margin-top:4px;">EcoHack 2026 · LeakMap v3</p>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- TOPBAR -->
+    <div id="topbar">
+      <div>
+        <div class="topbar-title" id="topbar-title">Live Map</div>
+        <div class="topbar-sub" id="topbar-sub">Loading data…</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline" id="export-csv-btn">⬇ Export CSV</button>
+        <button class="btn btn-primary" id="topbar-report-btn">+ Report Issue</button>
+      </div>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div id="content">
+
+      <!-- ═══ VIEW: MAP ═══ -->
+      <div class="view active" id="view-map">
+        <div id="map"></div>
+
+        <!-- Filter bar -->
+        <div id="map-top-bar">
+          <div id="filter-bar">
+            <button class="filter-pill active" data-type="All">All <span class="pill-count" id="pc-all">0</span></button>
+            <button class="filter-pill" data-type="Water Leak"><span class="dot" style="background:var(--c-leak)"></span>Leak <span class="pill-count" id="pc-leak">0</span></button>
+            <button class="filter-pill" data-type="Pollution"><span class="dot" style="background:var(--c-pollution)"></span>Pollution <span class="pill-count" id="pc-poll">0</span></button>
+            <button class="filter-pill" data-type="Dry Tap"><span class="dot" style="background:var(--c-drytap)"></span>Dry Tap <span class="pill-count" id="pc-dry">0</span></button>
+            <button class="filter-pill" data-type="Illegal Dumping"><span class="dot" style="background:var(--c-dumping)"></span>Dumping <span class="pill-count" id="pc-dump">0</span></button>
+            <button class="filter-pill" data-type="Overflow"><span class="dot" style="background:var(--c-overflow)"></span>Overflow <span class="pill-count" id="pc-overflow">0</span></button>
+            <button class="filter-pill" data-type="Contamination"><span class="dot" style="background:var(--c-contam)"></span>Contam. <span class="pill-count" id="pc-contam">0</span></button>
+            <button class="filter-pill" data-type="Other"><span class="dot" style="background:var(--c-other)"></span>Other <span class="pill-count" id="pc-other">0</span></button>
+            <label class="resolved-toggle" id="resolved-toggle">
+              <input type="checkbox" id="show-resolved-cb" />
+              ✅ Show Resolved
+            </label>
+            <button class="heatmap-toggle" id="heatmap-toggle-btn">🌡 Heatmap</button>
+          </div>
+        </div>
+
+        <!-- Stats panel -->
+        <div id="stats-panel">
+          <div class="stats-icon">📊</div>
+          <div class="stats-content">
+            <div class="stats-title">Live Overview</div>
+            <div class="stat-row"><span class="stat-label">🔴 Active</span><span class="stat-value" id="stat-total">0</span></div>
+            <div class="stat-row"><span class="stat-label">🔥 Hotspots</span><span class="stat-value" id="stat-hotspots">0</span></div>
+            <div class="stat-row"><span class="stat-label">✅ Fixed/7d</span><span class="stat-value" id="stat-resolved">0</span></div>
+            <div class="stat-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;">
+              <span class="stat-label">💧 Saved</span>
+              <span class="stat-value sm" id="stat-saved">0 L</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAB -->
+        <button id="report-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          Report Issue
+        </button>
+
+        <div id="pin-mode-hint">📍 Click on the map to drop your pin</div>
+
+        <!-- Slide-in report form -->
+        <div id="report-panel">
+          <div class="panel-header">
+            <h2>⚠ New Report</h2>
+            <button class="panel-close" id="panel-close-btn">✕</button>
+          </div>
+          <div class="panel-body">
+
+            <div class="form-group">
+              <label class="form-label">Issue Type <span class="required">*</span></label>
+              <div class="type-grid" id="type-grid">
+                <button type="button" class="type-btn" data-type="Water Leak"><span class="t-icon">💧</span><span>Leak</span><span class="t-score">Sev +3</span></button>
+                <button type="button" class="type-btn" data-type="Pollution"><span class="t-icon">☣️</span><span>Pollution</span><span class="t-score">Sev +5</span></button>
+                <button type="button" class="type-btn" data-type="Dry Tap"><span class="t-icon">🚰</span><span>Dry Tap</span><span class="t-score">Sev +2</span></button>
+                <button type="button" class="type-btn" data-type="Illegal Dumping"><span class="t-icon">🗑️</span><span>Dumping</span><span class="t-score">Sev +4</span></button>
+                <button type="button" class="type-btn" data-type="Overflow"><span class="t-icon">🌊</span><span>Overflow</span><span class="t-score">Sev +5</span></button>
+                <button type="button" class="type-btn" data-type="Contamination"><span class="t-icon">⚠️</span><span>Contam.</span><span class="t-score">Sev +7</span></button>
+              </div>
+              <div class="form-error-msg" id="type-error">Please select an issue type.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Severity</label>
+              <div class="sev-row">
+                <input type="range" class="sev-slider" id="sev-slider" min="1" max="4" value="2" step="1" />
+                <span class="sev-label" id="sev-label">Medium</span>
+              </div>
+              <div class="sev-hints"><span>Low</span><span>Medium</span><span>High</span><span>Critical</span></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="issue-desc">Description <span class="required">*</span></label>
+              <textarea class="form-control" id="issue-desc" placeholder="Pipe size, water colour, how long it's been happening…" rows="3" maxlength="280"></textarea>
+              <div class="char-counter"><span id="char-count">0</span>/280</div>
+              <div class="form-error-msg" id="desc-error">Description is required.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Location <span class="required">*</span></label>
+              <div id="location-status">📍 No location set — click map or use GPS</div>
+              <div class="form-error-msg" id="location-error">Please set a location.</div>
+              <div class="location-actions">
+                <button class="btn-form outline" id="map-pick-btn">📍 Click Map</button>
+                <button class="btn-form outline" id="gps-btn">📡 Use GPS</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Photo <span class="optional">(optional)</span></label>
+              <div class="photo-upload-area" id="photo-upload-area">
+                <div class="upload-icon">📷</div>
+                <div class="upload-text">Click or drag to upload a photo</div>
+                <input type="file" id="photo-input" accept="image/*" style="display:none" />
+              </div>
+              <div id="photo-preview">
+                <img id="photo-preview-img" src="" alt="Preview" />
+                <button class="remove-photo" id="remove-photo-btn">✕</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="reporter-name">Your Name <span class="optional">(optional)</span></label>
+              <input type="text" class="form-control" id="reporter-name" placeholder="Anonymous" maxlength="60" />
+            </div>
+
+          </div>
+          <div class="panel-footer">
+            <button class="btn-form primary" id="submit-btn" style="width:100%">Submit Report</button>
+          </div>
+        </div>
+
+      </div>
+      <!-- END view-map -->
+
+      <!-- ═══ VIEW: OVERVIEW ═══ -->
+      <div class="view" id="view-overview">
+        <div class="kpi-grid">
+          <div class="kpi-card" style="--kpi-color: var(--accent-bright);">
+            <div class="kpi-icon">📋</div>
+            <div class="kpi-label">Total Reports</div>
+            <div class="kpi-value" id="kpi-total">—</div>
+            <div class="kpi-delta">All time</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--warning);">
+            <div class="kpi-icon">⏳</div>
+            <div class="kpi-label">Open Issues</div>
+            <div class="kpi-value" id="kpi-open">—</div>
+            <div class="kpi-delta">Awaiting action</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--danger);">
+            <div class="kpi-icon">🚨</div>
+            <div class="kpi-label">Critical</div>
+            <div class="kpi-value" id="kpi-critical">—</div>
+            <div class="kpi-delta">Severity = Critical</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: var(--success);">
+            <div class="kpi-icon">✅</div>
+            <div class="kpi-label">Resolved / 7d</div>
+            <div class="kpi-value" id="kpi-resolved">—</div>
+            <div class="kpi-delta">This week</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: #A78BFA;">
+            <div class="kpi-icon">🔥</div>
+            <div class="kpi-label">Hotspots</div>
+            <div class="kpi-value" id="kpi-hotspots">—</div>
+            <div class="kpi-delta">3+ reports/500m</div>
+          </div>
+          <div class="kpi-card" style="--kpi-color: #06B6D4;">
+            <div class="kpi-icon">💧</div>
+            <div class="kpi-label">Est. Water Saved</div>
+            <div class="kpi-value sm-val" id="kpi-saved">—</div>
+            <div class="kpi-delta">From resolved reports</div>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">By Type</div>
+              <div class="chart-meta" id="chart-type-meta">—</div>
+            </div>
+            <div class="chart-canvas-wrap" style="height:160px;"><canvas id="chart-type"></canvas></div>
+            <div class="chart-legend" id="chart-type-legend"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">14-Day Report Trend</div>
+              <div class="chart-meta" id="chart-trend-meta">Loading…</div>
+            </div>
+            <div class="chart-canvas-wrap" style="height:200px;"><canvas id="chart-trend"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <div class="chart-title">By Severity</div>
+              <div class="chart-meta" id="chart-sev-meta">—</div>
+            </div>
+            <div class="chart-canvas-wrap" style="height:160px;"><canvas id="chart-severity"></canvas></div>
+            <div class="chart-legend" id="chart-sev-legend"></div>
+          </div>
+        </div>
+
+        <div class="bottom-grid">
+          <div class="table-card">
+            <div class="table-toolbar">
+              <div class="table-toolbar-title">Recent Reports</div>
+              <div class="table-toolbar-spacer"></div>
+              <input type="text" class="table-search" id="mini-search" placeholder="🔍 Search…" />
+              <select class="table-filter-select" id="mini-status-filter">
+                <option value="all">All Status</option>
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+              </select>
+              <select class="table-filter-select" id="mini-type-filter">
+                <option value="all">All Types</option>
+                <option value="Water Leak">Leak</option>
+                <option value="Pollution">Pollution</option>
+                <option value="Dry Tap">Dry Tap</option>
+                <option value="Illegal Dumping">Dumping</option>
+                <option value="Overflow">Overflow</option>
+                <option value="Contamination">Contam.</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="table-scroll">
+              <table id="mini-reports-table">
+                <thead>
+                  <tr>
+                    <th data-sort="type">Type</th>
+                    <th data-sort="severity">Severity</th>
+                    <th data-sort="status">Status</th>
+                    <th data-sort="urgencyScore">Urgency</th>
+                    <th data-sort="timestamp">Time</th>
+                    <th>Reporter</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="mini-table-body">
+                  <tr><td colspan="7" class="table-empty">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="activity-card">
+            <div class="activity-header">
+              <div class="activity-title">Live Activity</div>
+              <div class="chart-meta" id="activity-meta">0 reports</div>
+            </div>
+            <div class="activity-list" id="activity-list">
+              <div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- END view-overview -->
+
+      <!-- ═══ VIEW: ALL REPORTS ═══ -->
+      <div class="view" id="view-reports">
+        <div class="section-header">
+          <div class="section-title">All Reports</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span class="date-range-label">From</span>
+            <input type="date" class="date-input" id="date-from" />
+            <span class="date-range-label">To</span>
+            <input type="date" class="date-input" id="date-to" />
+            <button class="date-quick-btn" id="last-7-btn">Last 7d</button>
+            <button class="date-quick-btn" id="last-30-btn">Last 30d</button>
+            <button class="date-quick-btn" id="date-clear-btn">Clear</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <input type="text" class="table-search" id="full-search" placeholder="🔍 Search descriptions, reporters…" style="width:240px;" />
+          <select class="table-filter-select" id="full-status-filter">
+            <option value="all">All Status</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+          <select class="table-filter-select" id="full-type-filter">
+            <option value="all">All Types</option>
+            <option value="Water Leak">Leak</option>
+            <option value="Pollution">Pollution</option>
+            <option value="Dry Tap">Dry Tap</option>
+            <option value="Illegal Dumping">Dumping</option>
+            <option value="Overflow">Overflow</option>
+            <option value="Contamination">Contam.</option>
+            <option value="Other">Other</option>
+          </select>
+          <select class="table-filter-select" id="full-sev-filter">
+            <option value="all">All Severities</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+          <span id="full-table-count" style="font-size:11px;color:var(--muted);font-family:var(--font-mono);align-self:center;"></span>
+        </div>
+        <div class="full-table-card">
+          <div class="table-scroll" style="max-height:calc(100vh - 280px);">
+            <table id="full-reports-table">
+              <thead>
+                <tr>
+                  <th data-sort="type">Type</th>
+                  <th data-sort="severity">Severity</th>
+                  <th data-sort="status">Status</th>
+                  <th data-sort="urgencyScore">Urgency</th>
+                  <th>Description</th>
+                  <th>Reporter</th>
+                  <th data-sort="timestamp">Time</th>
+                  <th>Coords</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="full-table-body">
+                <tr><td colspan="9" class="table-empty">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- END view-reports -->
+
+      <!-- ═══ VIEW: HOTSPOTS ═══ -->
+      <div class="view" id="view-hotspots">
+        <div class="section-header">
+          <div class="section-title">🔥 Geographic Hotspots</div>
+          <div class="section-meta" id="hotspot-meta">—</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">Hotspot Clusters (≥3 reports within 500m)</div></div>
+            <div id="hotspot-list-container"><div class="table-empty">Loading…</div></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">Resolution Rate by Type</div></div>
+            <div class="chart-canvas-wrap" style="height:260px;"><canvas id="chart-resolution"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">Average Urgency Score by Type</div></div>
+            <div class="chart-canvas-wrap" style="height:200px;"><canvas id="chart-avg-urgency"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">Reports by Hour of Day</div></div>
+            <div class="chart-canvas-wrap" style="height:200px;"><canvas id="chart-hourly"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <!-- END view-hotspots -->
+
+      <!-- ═══ VIEW: ECOSCORE ═══ -->
+      <div class="view" id="view-ecoscore">
+        <div class="section-header">
+          <div class="section-title">🌿 Neighbourhood EcoScore</div>
+          <div class="section-meta">Western Province, Sri Lanka — worst first</div>
+        </div>
+
+        <div class="ecoscore-intro">
+          <p>EcoScore measures each neighbourhood's water management performance. A lower score means more unresolved issues, active hotspots, and slow response times.</p>
+          <div class="formula-box">
+            <div class="formula-title">Score Formula</div>
+            <div class="formula">EcoScore = 100 − (openReports × 3) − (hotspots × 8) − (avgResolutionDays × 1) + (resolvedThisMonth × 2)  ·  clamped 0–100</div>
+          </div>
+        </div>
+
+        <div class="legend-card-grid" style="margin-bottom:20px;">
+          <div class="legend-grade-card grade-healthy"><div class="legend-grade-score">80–100</div><div class="legend-grade-label">🟢 Healthy</div><div class="legend-grade-desc">Few open issues, fast resolution</div></div>
+          <div class="legend-grade-card grade-moderate"><div class="legend-grade-score">60–79</div><div class="legend-grade-label">🟡 Moderate</div><div class="legend-grade-desc">Some unresolved, no critical hotspots</div></div>
+          <div class="legend-grade-card grade-risk"><div class="legend-grade-score">40–59</div><div class="legend-grade-label">🟠 At Risk</div><div class="legend-grade-desc">Multiple open issues or slow response</div></div>
+          <div class="legend-grade-card grade-critical"><div class="legend-grade-score">0–39</div><div class="legend-grade-label">🔴 Critical</div><div class="legend-grade-desc">Hotspots active, long unresolved times</div></div>
+        </div>
+
+        <div class="nb-grid" id="nb-grid">
+          <!-- populated by JS -->
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">EcoScore by Neighbourhood</div></div>
+            <div class="chart-canvas-wrap" style="height:220px;"><canvas id="chart-ecoscore"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><div class="chart-title">Open vs Resolved by Area</div></div>
+            <div class="chart-canvas-wrap" style="height:220px;"><canvas id="chart-area-bar"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <!-- END view-ecoscore -->
+
+    </div>
+    <!-- END #content -->
+
+  </div>
+  <!-- END #main -->
+</div>
+<!-- END #shell -->
+
+<!-- Mobile Bottom Nav -->
+<nav id="bottom-nav">
+  <button class="bnav-item active" data-view="map"><span class="bnav-icon">🗺️</span><span class="bnav-label">Map</span></button>
+  <button class="bnav-item" data-view="overview"><span class="bnav-icon">📊</span><span class="bnav-label">Overview</span></button>
+  <button class="bnav-item" data-view="reports"><span class="bnav-icon">📋</span><span class="bnav-label">Reports</span></button>
+  <button class="bnav-item" data-view="hotspots"><span class="bnav-icon">🔥</span><span class="bnav-label">Hotspots</span></button>
+  <button class="bnav-item" data-view="ecoscore"><span class="bnav-icon">🌿</span><span class="bnav-label">EcoScore</span></button>
+</nav>
+
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     FIREBASE v10 — paste your config below
+══════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, addDoc, updateDoc,
+         onSnapshot, query, orderBy, serverTimestamp, getDocs }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+/* ─── 🔑 PASTE YOUR FIREBASE CONFIG HERE ─── */
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+/* ─────────────────────────────────────────── */
+
+/* ─── CONSTANTS ─── */
+const TYPE_COLORS = {
+  "Water Leak": "#0A7EA4", "Pollution": "#E63946", "Dry Tap": "#F4A261",
+  "Illegal Dumping": "#9333EA", "Overflow": "#2A9D8F",
+  "Contamination": "#F97316", "Other": "#6B7280"
+};
+const SEV_COLORS    = { Low:"#64748B", Medium:"#F4A261", High:"#E63946", Critical:"#DC2626" };
+const SEV_WEIGHT    = { Low:1, Medium:2, High:3, Critical:5 };
+const SEV_LABELS    = ["Low","Medium","High","Critical"];
+const WATER_SAVED_L = { "Water Leak":5000, "Dry Tap":1000, "Pollution":2000, "Illegal Dumping":500, "Overflow":3000, "Contamination":2000, "Other":500 };
+const URGENCY_TIP   = "Urgency = Severity weight × nearby-report density. Max 12.";
+const NEIGHBORHOODS = [
+  { id:"negombo",       name:"Negombo",       bounds:{ n:7.26, s:7.16, e:79.89, w:79.80 } },
+  { id:"colombo_north", name:"Colombo North", bounds:{ n:6.98, s:6.94, e:79.88, w:79.84 } },
+  { id:"colombo_south", name:"Colombo South", bounds:{ n:6.94, s:6.89, e:79.88, w:79.83 } },
+  { id:"wattala",       name:"Wattala",       bounds:{ n:7.01, s:6.98, e:79.90, w:79.85 } },
+  { id:"ja_ela",        name:"Ja-Ela",        bounds:{ n:7.08, s:7.02, e:79.90, w:79.86 } }
+];
+
+/* ─── INIT ─── */
+let db = null, storage = null;
+const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith("YOUR_"));
+if (isConfigured) {
+  try {
+    const app = initializeApp(firebaseConfig);
+    db      = getFirestore(app);
+    storage = getStorage(app);
+  } catch(e) { console.error("Firebase init:", e); }
+}
+
+/* ─── CHART DEFAULTS ─── */
+Chart.defaults.color = "#64748B";
+Chart.defaults.borderColor = "rgba(255,255,255,0.05)";
+Chart.defaults.font.family = "'Syne', sans-serif";
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.plugins.tooltip.backgroundColor = "#1E293B";
+Chart.defaults.plugins.tooltip.borderColor = "rgba(255,255,255,0.1)";
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.titleColor = "#E8F4F8";
+Chart.defaults.plugins.tooltip.bodyColor = "#94A3B8";
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+
+/* ─── MAP SETUP ─── */
+const map = L.map("map", { center:[7.2083,79.8358], zoom:10, zoomControl:false });
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  attribution:'© <a href="https://carto.com/">CARTO</a>',
+  subdomains:"abcd", maxZoom:19
+}).addTo(map);
+L.control.zoom({ position:"bottomleft" }).addTo(map);
+
+const clusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 60,
+  showCoverageOnHover: false,
+  iconCreateFunction(cluster) {
+    return L.divIcon({
+      html: `<div><span>${cluster.getChildCount()}</span></div>`,
+      className: "marker-cluster", iconSize: L.point(40,40)
+    });
+  }
+});
+map.addLayer(clusterGroup);
+
+/* ─── STATE ─── */
+let allReports  = [];
+let activeView  = "map";
+let sortField   = "timestamp", sortDir  = "desc";
+let fullSortF   = "timestamp", fullSortD = "desc";
+let markerMap   = {};
+let activeFilter = "All";
+let showResolved = false;
+let pickingPin   = false;
+let selectedLat  = null, selectedLng = null;
+let pinMarker    = null;
+let photoFile    = null;
+let selectedType = null;
+let heatLayer    = null, heatmapOn = false;
+let chartType=null, chartTrend=null, chartSeverity=null;
+let chartResolution=null, chartAvgUrgency=null, chartHourly=null;
+let chartEcoScore=null, chartAreaBar=null;
+
+/* ─── DEMO DATA ─── */
+function generateDemoData() {
+  const types  = ["Water Leak","Pollution","Dry Tap","Illegal Dumping","Overflow","Contamination","Other"];
+  const sevs   = ["Low","Medium","High","Critical"];
+  const stats  = ["Open","In Progress","Resolved"];
+  const names  = ["Kasun P.","Dilani S.","Anonymous","Raj M.","Sandya K.","Thilini W."];
+  const descs  = [
+    "Pipe burst near market — wasting heavily","Chemical runoff into canal",
+    "Tap has been dry for 3 days","Illegal waste dumped by river",
+    "Sewage overflow near school","Broken junction box, pooling water",
+    "Contaminated water from standpipe","Brown foam on canal surface"
+  ];
+  const now = Date.now(), reports = [];
+  for (let i = 0; i < 48; i++) {
+    const ts     = new Date(now - Math.random()*14*86400000);
+    const type   = types[Math.floor(Math.random()*types.length)];
+    const sev    = sevs[Math.floor(Math.random()*sevs.length)];
+    const status = Math.random()<0.35?"Resolved":Math.random()<0.2?"In Progress":"Open";
+    reports.push({
+      id:`demo_${i}`, type, severity:sev,
+      description:descs[Math.floor(Math.random()*descs.length)],
+      lat:7.0+Math.random()*0.8, lng:79.83+Math.random()*0.15,
+      status, urgencyScore:Math.floor(Math.random()*10)+2,
+      reporter:names[Math.floor(Math.random()*names.length)],
+      timestamp:{ toDate:()=>ts, seconds:ts.getTime()/1000 },
+      photoURL:null
+    });
+  }
+  return reports.sort((a,b)=>b.timestamp.seconds-a.timestamp.seconds);
+}
+
+/* ─── BOOT ─── */
+(function boot() {
+  if (!isConfigured) {
+    document.getElementById("loader-status").textContent = "Demo mode — Firebase not configured";
+    setTimeout(() => {
+      hideLoader();
+      showToast("Running in demo mode. Add Firebase config to go live.", "info");
+      allReports = generateDemoData();
+      renderAll();
+    }, 800);
+    return;
+  }
+  document.getElementById("loader-status").textContent = "Loading reports…";
+  startListener();
+  hideLoader();
+})();
+
+/* ─── REAL-TIME LISTENER ─── */
+function startListener() {
+  const q = query(collection(db,"reports"), orderBy("timestamp","desc"));
+  onSnapshot(q, snap => {
+    allReports = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    renderAll();
+  }, err => {
+    showToast("Snapshot error: "+err.message, "error");
+  });
+}
+
+/* ─── RENDER ALL ─── */
+function renderAll() {
+  updateMarkers();
+  updateMapStats();
+  updateKPIs();
+  updateNavBadges();
+  updateFilterPillCounts();
+  updateChartType();
+  updateChartTrend();
+  updateChartSeverity();
+  renderMiniTable();
+  renderActivityFeed();
+  updateTopbarSub();
+  if (heatmapOn) updateHeatmap();
+  if (activeView === "reports")  renderFullTable();
+  if (activeView === "hotspots") renderHotspots();
+  if (activeView === "ecoscore") renderEcoScore();
+}
+
+/* ─── MARKERS ─── */
+function updateMarkers() {
+  clusterGroup.clearLayers();
+  markerMap = {};
+  const filtered = allReports.filter(r => {
+    if (!showResolved && r.status === "Resolved") return false;
+    if (activeFilter !== "All" && r.type !== activeFilter) return false;
+    return true;
+  });
+  filtered.forEach(addMarker);
+}
+
+function addMarker(r) {
+  if (!r.lat || !r.lng) return;
+  const color   = TYPE_COLORS[r.type] || "#6B7280";
+  const opacity = r.status === "Resolved" ? 0.4 : 0.9;
+  const m = L.circleMarker([r.lat, r.lng], {
+    radius: r.status === "Resolved" ? 7 : 9,
+    fillColor: color, color:"#fff",
+    weight: r.status === "Resolved" ? 1 : 2,
+    opacity, fillOpacity: opacity
+  });
+  m.bindPopup(buildPopupHTML(r), { maxWidth:300, className:"lm-popup" });
+  clusterGroup.addLayer(m);
+  markerMap[r.id] = m;
+}
+
+function buildPopupHTML(r) {
+  const color      = TYPE_COLORS[r.type] || "#6B7280";
+  const sevCls     = `badge-${(r.severity||"low").toLowerCase()}`;
+  const statusCls  = `badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+  const timeAgo    = formatTimeAgo(r.timestamp?.toDate?.() || new Date());
+  const photoHTML  = r.photoURL ? `<img class="popup-photo" src="${esc(r.photoURL)}" alt="" />` : "";
+  const actionBtn  = r.status !== "Resolved"
+    ? `<button class="btn-resolve" onclick="window._resolveReport('${r.id}')">✓ Mark Resolved</button>`
+    : `<span class="badge badge-resolved">✅ Resolved</span>`;
+  const days = r.timestamp?.toDate ? Math.floor((Date.now()-r.timestamp.toDate().getTime())/86400000) : 0;
+  const shameMsg = days >= 14 ? `🔴 ${days}d — UNACCEPTABLE` : days >= 7 ? `🟠 ${days}d — WHY?` : days >= 3 ? `🟡 ${days}d open` : days >= 1 ? `${days}d open` : "NEW";
+  return `<div class="popup-inner">
+    ${photoHTML}
+    <div class="popup-body">
+      <div class="popup-header">
+        <span class="popup-type" style="color:${color}">${esc(r.type)}</span>
+        <span class="badge ${sevCls}">${esc(r.severity||"—")}</span>
+      </div>
+      <p class="popup-desc">${esc(r.description||"")}</p>
+      <div class="popup-meta">
+        <span>👤 ${esc(r.reporter||"Anonymous")}</span>
+        <span>🕐 ${timeAgo}</span>
+      </div>
+      <div class="popup-urgency">
+        🔥 Urgency: ${r.urgencyScore??0}
+        <span class="urgency-info" data-tip="${esc(URGENCY_TIP)}">ℹ️</span>
+        &nbsp;|&nbsp; ${shameMsg}
+      </div>
+      <div class="popup-header" style="margin-bottom:10px;">
+        <span class="badge ${statusCls}">${esc(r.status||"Open")}</span>
+      </div>
+      <div class="popup-actions">
+        ${actionBtn}
+        <button class="btn-close-popup" onclick="window._closePopup()">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+window._resolveReport = async (id) => {
+  if (!db) {
+    const r = allReports.find(x=>x.id===id);
+    if (r) { r.status="Resolved"; renderAll(); showToast("Marked resolved (demo).", "success"); }
+    return;
+  }
+  try {
+    await updateDoc(doc(db,"reports",id), { status:"Resolved", resolvedAt:serverTimestamp() });
+    showToast("Report marked as Resolved.", "success"); map.closePopup();
+  } catch(e) { showToast("Failed: "+e.message, "error"); }
+};
+window._closePopup = () => map.closePopup();
+
+/* ─── HEATMAP ─── */
+document.getElementById("heatmap-toggle-btn").addEventListener("click", () => {
+  heatmapOn = !heatmapOn;
+  document.getElementById("heatmap-toggle-btn").classList.toggle("active", heatmapOn);
+  if (heatmapOn) updateHeatmap();
+  else { if (heatLayer) { map.removeLayer(heatLayer); heatLayer=null; } }
+});
+
+function updateHeatmap() {
+  if (!heatmapOn) return;
+  if (heatLayer) map.removeLayer(heatLayer);
+  const pts = allReports
+    .filter(r => r.lat && r.lng && (showResolved || r.status !== "Resolved"))
+    .map(r => [r.lat, r.lng, Math.min((r.urgencyScore||1)/12,1.0)]);
+  if (typeof L.heatLayer === "function") {
+    heatLayer = L.heatLayer(pts, {
+      radius:30, blur:20, maxZoom:17,
+      gradient:{0.2:"#0A7EA4", 0.5:"#F4A261", 0.8:"#E63946", 1.0:"#DC2626"}
+    }).addTo(map);
+  } else {
+    showToast("Heatmap plugin not ready. Try again.", "error");
+    heatmapOn = false;
+    document.getElementById("heatmap-toggle-btn").classList.remove("active");
+  }
+}
+
+/* ─── FILTER PILLS ─── */
+document.getElementById("filter-bar").addEventListener("click", e => {
+  const pill = e.target.closest(".filter-pill");
+  if (!pill) return;
+  document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
+  pill.classList.add("active");
+  activeFilter = pill.dataset.type;
+  updateMarkers();
+  if (heatmapOn) updateHeatmap();
+});
+
+document.getElementById("resolved-toggle").addEventListener("click", () => {
+  showResolved = !showResolved;
+  document.getElementById("resolved-toggle").classList.toggle("active", showResolved);
+  document.getElementById("show-resolved-cb").checked = showResolved;
+  updateMarkers();
+  updateFilterPillCounts();
+  if (heatmapOn) updateHeatmap();
+});
+
+function updateFilterPillCounts() {
+  const tc = {};
+  allReports.forEach(r => {
+    if (!showResolved && r.status === "Resolved") return;
+    tc[r.type] = (tc[r.type]||0)+1;
+  });
+  const total = allReports.filter(r => showResolved||r.status!=="Resolved").length;
+  const idMap = { "all":"pc-all","Water Leak":"pc-leak","Pollution":"pc-poll","Dry Tap":"pc-dry","Illegal Dumping":"pc-dump","Overflow":"pc-overflow","Contamination":"pc-contam","Other":"pc-other" };
+  const valMap = { "all":total,...tc };
+  Object.entries(idMap).forEach(([k,elId]) => { const el=document.getElementById(elId); if(el) el.textContent=valMap[k]||0; });
+}
+
+/* ─── STATS PANEL COLLAPSE ─── */
+document.getElementById("stats-panel").addEventListener("click", e => {
+  const sp = document.getElementById("stats-panel");
+  if (window.innerWidth<=600||sp.classList.contains("collapsed")) sp.classList.toggle("collapsed");
+});
+
+function updateMapStats() {
+  const now=new Date(), weekAgo=new Date(now-7*86400000);
+  const active   = allReports.filter(r=>r.status!=="Resolved");
+  const resolved = allReports.filter(r=>r.status==="Resolved" && r.timestamp?.toDate?.()>=weekAgo);
+  animateStat("stat-total", active.length);
+  animateStat("stat-hotspots", computeHotspotClusters(active).length);
+  animateStat("stat-resolved", resolved.length);
+  const savedEl=document.getElementById("stat-saved"); if(savedEl) savedEl.textContent=fmtWater(calcWaterSaved());
+}
+
+function animateStat(id, val) {
+  const el=document.getElementById(id); if(!el) return;
+  if(parseInt(el.textContent)!==val) { el.textContent=val; el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); }
+}
+
+/* ─── KPIs ─── */
+function updateKPIs() {
+  const open    = allReports.filter(r=>r.status!=="Resolved").length;
+  const crit    = allReports.filter(r=>r.severity==="Critical"&&r.status!=="Resolved").length;
+  const now=new Date(), weekAgo=new Date(now-7*86400000);
+  const res7d   = allReports.filter(r=>r.status==="Resolved"&&r.timestamp?.toDate?.()>=weekAgo).length;
+  const hs      = computeHotspotClusters(allReports.filter(r=>r.status!=="Resolved")).length;
+  setText("kpi-total",    allReports.length);
+  setText("kpi-open",     open);
+  setText("kpi-critical", crit);
+  setText("kpi-resolved", res7d);
+  setText("kpi-hotspots", hs);
+  setText("kpi-saved",    fmtWater(calcWaterSaved()));
+}
+
+function updateNavBadges() {
+  setText("nav-badge-reports",    allReports.length);
+  setText("nav-badge-hotspots",   computeHotspotClusters(allReports.filter(r=>r.status!=="Resolved")).length);
+  setText("nav-badge-critical",   allReports.filter(r=>r.severity==="Critical"&&r.status!=="Resolved").length);
+  setText("nav-badge-unresolved", allReports.filter(r=>r.status!=="Resolved").length);
+  const avg=computeAllNeighborhoods().reduce((s,n)=>s+n.ecoScore,0)/(computeAllNeighborhoods().length||1);
+  setText("nav-badge-overview", Math.round(avg)+"🌿");
+}
+
+/* ─── CHARTS ─── */
+function updateChartType() {
+  const types = Object.keys(TYPE_COLORS);
+  const counts = {}; types.forEach(t=>counts[t]=0);
+  allReports.forEach(r=>{ if(counts[r.type]!==undefined) counts[r.type]++; });
+  const total = allReports.length;
+  setText("chart-type-meta", `${total} reports`);
+  if(chartType){chartType.destroy();chartType=null;}
+  chartType = new Chart(document.getElementById("chart-type"),{
+    type:"doughnut",
+    data:{
+      labels:types,
+      datasets:[{data:types.map(t=>counts[t]),backgroundColor:types.map(t=>TYPE_COLORS[t]+"BB"),borderColor:types.map(t=>TYPE_COLORS[t]),borderWidth:2}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw}`}}}}
+  });
+  document.getElementById("chart-type-legend").innerHTML = types.map(t=>`
+    <div class="legend-row">
+      <span class="legend-dot" style="background:${TYPE_COLORS[t]}"></span>
+      <span class="legend-label">${t}</span>
+      <span class="legend-count">${counts[t]}</span>
+      <span class="legend-pct">${Math.round(counts[t]/Math.max(total,1)*100)}%</span>
+    </div>`).join("");
+}
+
+function updateChartTrend() {
+  const days=14, now=new Date(), totals=new Array(days).fill(0), opens=new Array(days).fill(0), labels=[];
+  for(let i=days-1;i>=0;i--){const d=new Date(now-i*86400000);labels.push(d.toLocaleDateString("en-US",{month:"short",day:"numeric"}));}
+  allReports.forEach(r=>{
+    const ts=r.timestamp?.toDate?.(); if(!ts) return;
+    const diff=Math.floor((now-ts)/86400000);
+    if(diff<days){totals[days-1-diff]++;if(r.status!=="Resolved")opens[days-1-diff]++;}
+  });
+  setText("chart-trend-meta",`Peak: ${Math.max(...totals,1)} reports/day`);
+  if(chartTrend){chartTrend.destroy();chartTrend=null;}
+  chartTrend=new Chart(document.getElementById("chart-trend"),{
+    type:"line",
+    data:{labels,datasets:[
+      {label:"Total",data:totals,borderColor:"#0A7EA4",backgroundColor:"rgba(10,126,164,0.1)",borderWidth:2,pointRadius:3,tension:0.4,fill:true},
+      {label:"Open", data:opens, borderColor:"#F4A261",backgroundColor:"rgba(244,162,97,0.05)",borderWidth:2,borderDash:[4,3],pointRadius:2,tension:0.4,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{display:true,labels:{boxWidth:10,padding:16,font:{size:11},color:"#94A3B8"}}},
+      scales:{x:{grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},maxRotation:0,color:"#64748B",callback:(v,i)=>i%2===0?labels[i]:""}},
+              y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}
+  });
+}
+
+function updateChartSeverity() {
+  const order=["Low","Medium","High","Critical"],counts={Low:0,Medium:0,High:0,Critical:0};
+  allReports.forEach(r=>{if(counts[r.severity]!==undefined)counts[r.severity]++;});
+  const total=Object.values(counts).reduce((s,v)=>s+v,0);
+  setText("chart-sev-meta",`${total} classified`);
+  if(chartSeverity){chartSeverity.destroy();chartSeverity=null;}
+  chartSeverity=new Chart(document.getElementById("chart-severity"),{
+    type:"bar",
+    data:{labels:order,datasets:[{data:order.map(k=>counts[k]),backgroundColor:order.map(k=>SEV_COLORS[k]+"88"),borderColor:order.map(k=>SEV_COLORS[k]),borderWidth:2,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}
+  });
+  document.getElementById("chart-sev-legend").innerHTML=order.map(k=>`
+    <div class="legend-row">
+      <span class="legend-dot" style="background:${SEV_COLORS[k]}"></span>
+      <span class="legend-label">${k}</span>
+      <span class="legend-count">${counts[k]}</span>
+      <span class="legend-pct">${Math.round(counts[k]/Math.max(total,1)*100)}%</span>
+    </div>`).join("");
+}
+
+/* ─── TABLES ─── */
+function renderMiniTable() {
+  const search=lower(document.getElementById("mini-search")?.value||"");
+  const stF=document.getElementById("mini-status-filter")?.value||"all";
+  const tyF=document.getElementById("mini-type-filter")?.value||"all";
+  let rows=filterReports(allReports,search,stF,tyF,"all");
+  rows=sortRows(rows,sortField,sortDir).slice(0,20);
+  const tbody=document.getElementById("mini-table-body");
+  if(!tbody) return;
+  tbody.innerHTML=rows.length===0?`<tr><td colspan="7" class="table-empty">No reports match filters.</td></tr>`:rows.map(r=>buildRow(r,false)).join("");
+}
+
+function renderFullTable() {
+  const search=lower(document.getElementById("full-search")?.value||"");
+  const stF=document.getElementById("full-status-filter")?.value||"all";
+  const tyF=document.getElementById("full-type-filter")?.value||"all";
+  const svF=document.getElementById("full-sev-filter")?.value||"all";
+  const dFrom=document.getElementById("date-from")?.value;
+  const dTo=document.getElementById("date-to")?.value;
+  let rows=filterReports(allReports,search,stF,tyF,svF);
+  if(dFrom){const ms=new Date(dFrom).getTime();rows=rows.filter(r=>{const ts=r.timestamp?.toDate?.();return ts&&ts.getTime()>=ms;});}
+  if(dTo){const td=new Date(dTo);td.setHours(23,59,59,999);rows=rows.filter(r=>{const ts=r.timestamp?.toDate?.();return ts&&ts.getTime()<=td.getTime();});}
+  rows=sortRows(rows,fullSortF,fullSortD);
+  const cEl=document.getElementById("full-table-count");if(cEl)cEl.textContent=`${rows.length} of ${allReports.length}`;
+  const tbody=document.getElementById("full-table-body");if(!tbody)return;
+  tbody.innerHTML=rows.length===0?`<tr><td colspan="9" class="table-empty">No reports match filters.</td></tr>`:rows.map(r=>buildRow(r,true)).join("");
+}
+
+function buildRow(r, full) {
+  const color=TYPE_COLORS[r.type]||"#6B7280";
+  const stCls=`badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+  const svCls=`badge-${(r.severity||"low").toLowerCase()}`;
+  const ts=r.timestamp?.toDate?.();
+  const score=r.urgencyScore||0;
+  const uc=score>=8?"#DC2626":score>=5?"#F4A261":"#2A9D8F";
+  const coordsCol=full?`<td style="font-family:var(--font-mono);font-size:10px;color:var(--muted);">${r.lat?.toFixed(4)||"—"},${r.lng?.toFixed(4)||"—"}</td>`:"";
+  const descCol=full?`<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--subtle);">${esc(r.description||"")}</td>`:"";
+  return `<tr>
+    <td><div class="td-type"><span class="type-dot" style="background:${color}"></span>${esc(r.type)}</div></td>
+    <td><span class="badge ${svCls}">${esc(r.severity||"—")}</span></td>
+    <td><span class="badge ${stCls}">${esc(r.status||"Open")}</span></td>
+    <td><div class="urgency-bar"><div class="urgency-pip" style="width:${Math.min(score/12*100,100)}%;background:${uc};min-width:4px;max-width:56px;"></div><span style="font-family:var(--font-mono);font-size:11px;color:${uc};">${score}</span><span class="urgency-info" data-tip="${esc(URGENCY_TIP)}">ℹ️</span></div></td>
+    ${descCol}
+    <td style="color:var(--subtle);">${esc(r.reporter||"Anonymous")}</td>
+    <td style="font-family:var(--font-mono);font-size:10px;">${ts?formatTimeAgo(ts):"—"}</td>
+    ${coordsCol}
+    <td>${getActionBtn(r)}</td>
+  </tr>`;
+}
+
+function getActionBtn(r) {
+  if(r.status==="Open") return `<button class="action-btn action-progress" onclick="window._dbProgress('${r.id}')">▶ In Progress</button>`;
+  if(r.status==="In Progress") return `<button class="action-btn action-resolve" onclick="window._dbResolve('${r.id}')">✓ Resolve</button>`;
+  return `<button class="action-btn action-reopen" onclick="window._dbReopen('${r.id}')">↩ Reopen</button>`;
+}
+
+async function updateStatus(id, status, msg) {
+  if(!db){const r=allReports.find(x=>x.id===id);if(r){r.status=status;renderAll();showToast(msg+" (demo).","success");}return;}
+  try{await updateDoc(doc(db,"reports",id),{status,resolvedAt:status==="Resolved"?serverTimestamp():null});showToast(msg,"success");}
+  catch(e){showToast("Failed: "+e.message,"error");}
+}
+
+window._dbProgress = id => updateStatus(id,"In Progress","Marked In Progress.");
+window._dbResolve  = id => updateStatus(id,"Resolved","Report Resolved.");
+window._dbReopen   = id => updateStatus(id,"Open","Report Reopened.");
+window._resolveReport = id => updateStatus(id,"Resolved","Resolved.").then(()=>map.closePopup());
+
+/* ─── HOTSPOT VIEW ─── */
+function renderHotspots() {
+  const open=allReports.filter(r=>r.status!=="Resolved");
+  const clusters=computeHotspotClusters(open);
+  setText("hotspot-meta",`${clusters.length} active hotspot${clusters.length!==1?"s":""}`);
+  const container=document.getElementById("hotspot-list-container");
+  container.innerHTML=clusters.length===0
+    ?`<div class="table-empty">🎉 No hotspots detected. Good news!</div>`
+    :`<div class="hotspot-list">${clusters.map((c,i)=>`
+        <div class="hotspot-row">
+          <div>
+            <div style="font-weight:700;font-size:12px;color:var(--text);">#${i+1} — ${c.types.join(", ")}</div>
+            <div class="hotspot-loc">${c.center.lat.toFixed(4)}, ${c.center.lng.toFixed(4)}</div>
+            <a href="#" onclick="window._flyToCluster(${c.center.lat},${c.center.lng})" style="font-size:10px;color:var(--accent-bright);text-decoration:none;">View on map →</a>
+          </div>
+          <div class="hotspot-count">${c.count}</div>
+        </div>`).join("")}
+      </div>`;
+
+  window._flyToCluster = (lat,lng) => { switchView("map"); setTimeout(()=>map.flyTo([lat,lng],15,{duration:0.8}),50); };
+
+  const types=Object.keys(TYPE_COLORS);
+  const resolvedPcts=types.map(t=>{const tr=allReports.filter(r=>r.type===t);return!tr.length?0:Math.round(tr.filter(r=>r.status==="Resolved").length/tr.length*100);});
+  if(chartResolution){chartResolution.destroy();chartResolution=null;}
+  chartResolution=new Chart(document.getElementById("chart-resolution"),{type:"bar",data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Resolution %",data:resolvedPcts,backgroundColor:resolvedPcts.map(p=>p>=70?"rgba(42,157,143,0.5)":p>=40?"rgba(244,162,97,0.5)":"rgba(230,57,70,0.5)"),borderColor:resolvedPcts.map(p=>p>=70?"#2A9D8F":p>=40?"#F4A261":"#E63946"),borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B",callback:v=>v+"%"}}},plugins:{tooltip:{callbacks:{label:ctx=>` ${ctx.raw}% resolved`}}}}});
+
+  const avgU=types.map(t=>{const tr=allReports.filter(r=>r.type===t&&r.urgencyScore!=null);return!tr.length?0:parseFloat((tr.reduce((s,r)=>s+r.urgencyScore,0)/tr.length).toFixed(1));});
+  if(chartAvgUrgency){chartAvgUrgency.destroy();chartAvgUrgency=null;}
+  chartAvgUrgency=new Chart(document.getElementById("chart-avg-urgency"),{type:"bar",data:{labels:types.map(t=>t.split(" ")[0]),datasets:[{label:"Avg Urgency",data:avgU,backgroundColor:types.map(t=>(TYPE_COLORS[t]||"#6B7280")+"88"),borderColor:types.map(t=>TYPE_COLORS[t]||"#6B7280"),borderWidth:2,borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{beginAtZero:true,max:12,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}},y:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}}}}});
+
+  const hr=new Array(24).fill(0);
+  allReports.forEach(r=>{const ts=r.timestamp?.toDate?.();if(ts)hr[ts.getHours()]++;});
+  const mx=Math.max(...hr,1);
+  if(chartHourly){chartHourly.destroy();chartHourly=null;}
+  chartHourly=new Chart(document.getElementById("chart-hourly"),{type:"bar",data:{labels:Array.from({length:24},(_,i)=>`${i}:00`),datasets:[{data:hr,backgroundColor:hr.map(v=>v>=mx*0.7?"rgba(230,57,70,0.6)":"rgba(10,126,164,0.4)"),borderColor:hr.map(v=>v>=mx*0.7?"#E63946":"#0A7EA4"),borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:9},color:"#64748B",callback:(v,i)=>i%4===0?`${i}:00`:""}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}});
+}
+
+/* ─── ECOSCORE VIEW ─── */
+const ECOSCORE_NEIGHBORHOODS = NEIGHBORHOODS;
+
+function computeAllNeighborhoods() {
+  const open = allReports.filter(r=>r.status!=="Resolved");
+  const hotspots = computeHotspotClusters(open);
+  return ECOSCORE_NEIGHBORHOODS.map(hood => {
+    const {n,s,e,w}=hood.bounds;
+    const reps=allReports.filter(r=>r.lat<=n&&r.lat>=s&&r.lng<=e&&r.lng>=w);
+    const openR=reps.filter(r=>r.status!=="Resolved");
+    const resolvedR=reps.filter(r=>r.status==="Resolved");
+    const hoodHs=hotspots.filter(h=>h.center.lat<=n&&h.center.lat>=s&&h.center.lng<=e&&h.center.lng>=w);
+    const resolvedWithTime=resolvedR.filter(r=>r.timestamp?.toDate);
+    const avgRes=resolvedWithTime.length?resolvedWithTime.reduce((s,r)=>{const ms=Date.now()-r.timestamp.toDate().getTime();return s+ms/86400000;},0)/resolvedWithTime.length:0;
+    const now=new Date();
+    const resolvedThisMonth=resolvedR.filter(r=>{const d=r.timestamp?.toDate?.();return d&&d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();}).length;
+    const ecoScore=Math.max(0,Math.min(100,Math.round(100-(openR.length*3)-(hoodHs.length*8)-(Math.round(avgRes)*1)+(resolvedThisMonth*2))));
+    const grade=ecoScore>=80?{label:"Healthy",css:"grade-healthy"}:ecoScore>=60?{label:"Moderate",css:"grade-moderate"}:ecoScore>=40?{label:"At Risk",css:"grade-risk"}:{label:"Critical",css:"grade-critical"};
+    return {...hood,ecoScore,grade:grade.label,gradeCss:grade.css,openReports:openR.length,resolvedReports:resolvedR.length,totalReports:reps.length,hotspotCount:hoodHs.length,avgResolutionDays:Math.round(avgRes*10)/10};
+  }).filter(Boolean).sort((a,b)=>a.ecoScore-b.ecoScore);
+}
+
+function renderEcoScore() {
+  const hoods=computeAllNeighborhoods();
+  const grid=document.getElementById("nb-grid");
+  if(!grid) return;
+  if(hoods.every(n=>n.totalReports===0)){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--muted);">
+      <div style="font-size:36px;opacity:0.5;margin-bottom:8px;">📍</div>
+      <p>No reports in any neighbourhood yet.</p>
+      <p style="font-size:12px;margin-top:4px;">Submit a report or click "Load Demo Data".</p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML=hoods.map(n=>{
+    const resolveRate=n.totalReports>0?Math.round((n.resolvedReports/n.totalReports)*100):100;
+    const mapLat=((n.bounds.n+n.bounds.s)/2).toFixed(4), mapLng=((n.bounds.e+n.bounds.w)/2).toFixed(4);
+    return `<div class="nb-card ${n.gradeCss}">
+      <div class="nb-header">
+        <div><div class="nb-name">${n.name}</div><div class="nb-grade-label">${n.grade}</div></div>
+        <div><span class="nb-score-num">${n.ecoScore}</span><span class="nb-score-sub">/100</span></div>
+      </div>
+      <div class="nb-progress-bar"><div class="nb-progress-fill" style="width:${n.ecoScore}%"></div></div>
+      <div class="nb-stats">
+        <div class="nb-stat"><span class="nb-stat-val" style="color:var(--danger)">${n.openReports}</span><span class="nb-stat-lbl">Open</span></div>
+        <div class="nb-stat"><span class="nb-stat-val" style="color:var(--success)">${n.resolvedReports}</span><span class="nb-stat-lbl">Fixed</span></div>
+        <div class="nb-stat"><span class="nb-stat-val">${n.hotspotCount}</span><span class="nb-stat-lbl">Spots</span></div>
+        <div class="nb-stat"><span class="nb-stat-val">${n.avgResolutionDays}d</span><span class="nb-stat-lbl">Avg Fix</span></div>
+      </div>
+      <div class="nb-footer">
+        <span style="font-size:11px;color:var(--muted);">Resolve: <strong>${resolveRate}%</strong></span>
+        <a href="#" onclick="window._flyToCluster(${((n.bounds.n+n.bounds.s)/2).toFixed(4)},${((n.bounds.e+n.bounds.w)/2).toFixed(4)})" class="btn-view-map">View map →</a>
+      </div>
+    </div>`;
+  }).join("");
+
+  if(chartEcoScore){chartEcoScore.destroy();chartEcoScore=null;}
+  const gradeColors=hoods.map(n=>n.gradeCss==="grade-healthy"?"#2A9D8F":n.gradeCss==="grade-moderate"?"#d4ac0d":n.gradeCss==="grade-risk"?"#F4A261":"#E63946");
+  chartEcoScore=new Chart(document.getElementById("chart-ecoscore"),{type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"EcoScore",data:hoods.map(n=>n.ecoScore),backgroundColor:gradeColors.map(c=>c+"88"),borderColor:gradeColors,borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,max:100,grid:{color:"rgba(255,255,255,0.04)"},ticks:{font:{size:10},color:"#64748B"}}}}});
+
+  if(chartAreaBar){chartAreaBar.destroy();chartAreaBar=null;}
+  chartAreaBar=new Chart(document.getElementById("chart-area-bar"),{type:"bar",data:{labels:hoods.map(n=>n.name),datasets:[{label:"Open",data:hoods.map(n=>n.openReports),backgroundColor:"rgba(230,57,70,0.7)",borderColor:"#E63946",borderWidth:1,borderRadius:4},{label:"Resolved",data:hoods.map(n=>n.resolvedReports),backgroundColor:"rgba(42,157,143,0.7)",borderColor:"#2A9D8F",borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{boxWidth:10,padding:12,font:{size:11},color:"#94A3B8"}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:"#64748B"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,0.04)"},ticks:{stepSize:1,font:{size:10},color:"#64748B"}}}}});
+}
+
+/* ─── ACTIVITY FEED ─── */
+function renderActivityFeed() {
+  const list=document.getElementById("activity-list"); if(!list) return;
+  const recent=allReports.slice(0,14);
+  setText("activity-meta",`${allReports.length} total`);
+  if(!recent.length){list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;">No reports yet.</div>`;return;}
+  list.innerHTML=recent.map(r=>{
+    const color=TYPE_COLORS[r.type]||"#6B7280";
+    const ts=r.timestamp?.toDate?.();
+    const stCls=`badge-${(r.status||"open").toLowerCase().replace(" ","-")}`;
+    return `<div class="activity-item">
+      <div class="activity-dot" style="background:${color}"></div>
+      <div class="activity-body">
+        <div class="activity-type">${esc(r.type)} · <span class="badge ${stCls}" style="font-size:9px;">${esc(r.status||"Open")}</span></div>
+        <div class="activity-desc">${esc(r.description||"No description")}</div>
+        <div class="activity-time">🕐 ${ts?formatTimeAgo(ts):"—"} · ${esc(r.reporter||"Anonymous")}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ─── REPORT FORM ─── */
+const reportPanel=document.getElementById("report-panel");
+const panelClose=document.getElementById("panel-close-btn");
+function openPanel(){reportPanel.classList.add("open");}
+function closePanel(){reportPanel.classList.remove("open");exitPickPinMode();resetForm();}
+document.getElementById("report-btn").addEventListener("click",openPanel);
+document.getElementById("topbar-report-btn").addEventListener("click",()=>{switchView("map");setTimeout(openPanel,50);});
+panelClose.addEventListener("click",closePanel);
+
+// Type grid buttons
+document.getElementById("type-grid").addEventListener("click",e=>{
+  const btn=e.target.closest(".type-btn"); if(!btn) return;
+  document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("selected"));
+  btn.classList.add("selected");
+  selectedType=btn.dataset.type;
+  document.getElementById("type-error").classList.remove("visible");
+});
+
+// Severity slider
+const sevSlider=document.getElementById("sev-slider");
+sevSlider.addEventListener("input",()=>{
+  const labels=["Low","Medium","High","Critical"];
+  const colors=["#64748B","#F4A261","#E63946","#DC2626"];
+  const v=parseInt(sevSlider.value)-1;
+  const el=document.getElementById("sev-label");
+  el.textContent=labels[v]; el.style.color=colors[v];
+});
+
+// Char counter
+document.getElementById("issue-desc").addEventListener("input",function(){
+  document.getElementById("char-count").textContent=this.value.length;
+});
+
+// Pin mode
+const mapPickBtn=document.getElementById("map-pick-btn");
+const pinModeHint=document.getElementById("pin-mode-hint");
+mapPickBtn.addEventListener("click",()=>{ pickingPin?exitPickPinMode():enterPickPinMode(); });
+function enterPickPinMode(){pickingPin=true;mapPickBtn.classList.add("active");mapPickBtn.textContent="✕ Cancel";pinModeHint.classList.add("visible");map.getContainer().style.cursor="crosshair";}
+function exitPickPinMode(){pickingPin=false;mapPickBtn.classList.remove("active");mapPickBtn.textContent="📍 Click Map";pinModeHint.classList.remove("visible");map.getContainer().style.cursor="";}
+map.on("click",e=>{
+  if(!pickingPin) return;
+  selectedLat=e.latlng.lat; selectedLng=e.latlng.lng;
+  if(pinMarker) map.removeLayer(pinMarker);
+  pinMarker=L.marker([selectedLat,selectedLng],{icon:L.divIcon({html:`<div style="background:var(--danger);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(230,57,70,0.3)"></div>`,className:"",iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
+  setLocStatus(`📍 ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`,true);
+  exitPickPinMode(); openPanel();
+});
+
+// GPS
+const gpsBtn=document.getElementById("gps-btn");
+gpsBtn.addEventListener("click",()=>{
+  if(!navigator.geolocation){showToast("GPS not supported.","error");return;}
+  gpsBtn.disabled=true; gpsBtn.innerHTML='<span class="spinner"></span> Locating…';
+  setLocStatus("📡 Acquiring GPS…",false);
+  navigator.geolocation.getCurrentPosition(pos=>{
+    selectedLat=pos.coords.latitude; selectedLng=pos.coords.longitude;
+    if(pinMarker) map.removeLayer(pinMarker);
+    pinMarker=L.marker([selectedLat,selectedLng],{icon:L.divIcon({html:`<div style="background:var(--success);width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 3px rgba(42,157,143,0.3)"></div>`,className:"",iconSize:[14,14],iconAnchor:[7,7]})}).addTo(map);
+    map.setView([selectedLat,selectedLng],15);
+    setLocStatus(`📡 GPS: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`,true);
+    gpsBtn.disabled=false; gpsBtn.innerHTML="📡 Use GPS";
+    showToast("Location acquired!","success");
+  },err=>{
+    const msgs={1:"Location denied — click the map.",2:"GPS unavailable.",3:"GPS timed out."};
+    showToast(msgs[err.code]||"GPS failed.","error");
+    setLocStatus("Location unavailable. Click the map.",false,true);
+    gpsBtn.disabled=false; gpsBtn.innerHTML="📡 Use GPS";
+  },{timeout:10000,enableHighAccuracy:true,maximumAge:0});
+});
+
+function setLocStatus(msg,ok=false,err=false){
+  const el=document.getElementById("location-status");
+  el.textContent=msg; el.classList.toggle("has-location",ok); el.classList.toggle("error",err);
+}
+
+// Photo upload
+const photoUploadArea=document.getElementById("photo-upload-area");
+const photoInput=document.getElementById("photo-input");
+photoUploadArea.addEventListener("click",()=>photoInput.click());
+photoUploadArea.addEventListener("dragover",e=>{e.preventDefault();photoUploadArea.style.borderColor="var(--accent)";});
+photoUploadArea.addEventListener("dragleave",()=>{photoUploadArea.style.borderColor="";});
+photoUploadArea.addEventListener("drop",e=>{e.preventDefault();photoUploadArea.style.borderColor="";const f=e.dataTransfer.files[0];if(f)handlePhoto(f);});
+photoInput.addEventListener("change",()=>{if(photoInput.files[0])handlePhoto(photoInput.files[0]);});
+function handlePhoto(file){
+  if(!file.type.startsWith("image/")){showToast("Please select an image file.","error");return;}
+  photoFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{document.getElementById("photo-preview-img").src=e.target.result;document.getElementById("photo-preview").style.display="block";photoUploadArea.style.display="none";};
+  reader.readAsDataURL(file);
+}
+document.getElementById("remove-photo-btn").addEventListener("click",()=>{
+  photoFile=null; document.getElementById("photo-preview").style.display="none";
+  photoUploadArea.style.display="block"; photoInput.value="";
+});
+
+// Submit
+document.getElementById("submit-btn").addEventListener("click",handleSubmit);
+async function handleSubmit() {
+  let valid=true;
+  if(!selectedType){document.getElementById("type-error").classList.add("visible");valid=false;}
+  if(!document.getElementById("issue-desc").value.trim()){document.getElementById("desc-error").classList.add("visible");document.getElementById("issue-desc").classList.add("error");valid=false;}else{document.getElementById("desc-error").classList.remove("visible");document.getElementById("issue-desc").classList.remove("error");}
+  if(selectedLat===null){document.getElementById("location-error").classList.add("visible");valid=false;}else{document.getElementById("location-error").classList.remove("visible");}
+  if(!valid) return;
+
+  if(!db){showToast("Firebase not configured. Can't submit in demo mode.","error");return;}
+
+  const submitBtn=document.getElementById("submit-btn");
+  submitBtn.disabled=true; submitBtn.textContent="Submitting…";
+
+  try {
+    let photoURL=null;
+    if(photoFile&&storage){
+      const ref=storageRef(storage,`reports/${Date.now()}_${photoFile.name}`);
+      await uploadBytes(ref,photoFile);
+      photoURL=await getDownloadURL(ref);
+    }
+    const sevLabels=["Low","Medium","High","Critical"];
+    const severity=sevLabels[parseInt(document.getElementById("sev-slider").value)-1]||"Medium";
+    const urgencyScore=calcUrgencyScore(severity,selectedLat,selectedLng);
+    await addDoc(collection(db,"reports"),{
+      type:selectedType, severity,
+      description:document.getElementById("issue-desc").value.trim(),
+      lat:selectedLat, lng:selectedLng,
+      photoURL, reporter:document.getElementById("reporter-name").value.trim()||"Anonymous",
+      status:"Open", timestamp:serverTimestamp(), urgencyScore
+    });
+    showToast("Report submitted successfully 🎉","success");
+    closePanel();
+  } catch(e) {
+    showToast("Submission failed. Check your connection.","error");
+  } finally {
+    submitBtn.disabled=false; submitBtn.textContent="Submit Report";
+  }
+}
+
+function calcUrgencyScore(severity,lat,lng){
+  const w=SEV_WEIGHT[severity]||1;
+  const nearby=allReports.filter(r=>r.status!=="Resolved"&&distMeters(lat,lng,r.lat,r.lng)<=500);
+  return Math.min(w+nearby.length*2,12);
+}
+
+function resetForm(){
+  selectedType=null; photoFile=null; selectedLat=null; selectedLng=null;
+  if(pinMarker){map.removeLayer(pinMarker);pinMarker=null;}
+  document.querySelectorAll(".type-btn").forEach(b=>b.classList.remove("selected"));
+  document.getElementById("type-error").classList.remove("visible");
+  document.getElementById("desc-error").classList.remove("visible");
+  document.getElementById("location-error").classList.remove("visible");
+  document.getElementById("issue-desc").value="";
+  document.getElementById("reporter-name").value="";
+  document.getElementById("sev-slider").value="2";
+  document.getElementById("sev-label").textContent="Medium";
+  document.getElementById("sev-label").style.color="";
+  document.getElementById("char-count").textContent="0";
+  setLocStatus("📍 No location set — click map or use GPS",false);
+  document.getElementById("photo-preview").style.display="none";
+  document.getElementById("photo-upload-area").style.display="block";
+  photoInput.value="";
+}
+
+/* ─── SEED DATA ─── */
+async function seedData() {
+  if(!db){showToast("Can't seed in demo mode — configure Firebase first.","error");return;}
+  const existing=await getDocs(collection(db,"reports"));
+  if(existing.size>=10){const ok=confirm(`There are already ${existing.size} reports.\n\nAdd 30 demo reports anyway?`);if(!ok)return;}
+  showToast("Seeding demo data…","info");
+  const now=Date.now(), DAY=86400000;
+  const SEED=[
+    {type:"Water Leak",lat:7.2095,lng:79.8370,desc:"Pipe burst near market — wasting heavily",daysAgo:14,sev:"High",status:"Open"},
+    {type:"Overflow",lat:7.2101,lng:79.8375,desc:"Drain overflowing onto main road",daysAgo:11,sev:"High",status:"Open"},
+    {type:"Water Leak",lat:7.2088,lng:79.8365,desc:"Broken junction box, pooling water",daysAgo:9,sev:"Medium",status:"Open"},
+    {type:"Contamination",lat:7.2110,lng:79.8380,desc:"Brown water from street tap",daysAgo:6,sev:"Critical",status:"Open"},
+    {type:"Water Leak",lat:7.2093,lng:79.8372,desc:"Tap left open near temple",daysAgo:3,sev:"Low",status:"Open"},
+    {type:"Illegal Dumping",lat:7.2200,lng:79.8450,desc:"Rubble dumped near canal",daysAgo:5,sev:"Medium",status:"Open"},
+    {type:"Water Leak",lat:7.1850,lng:79.8250,desc:"Water meter leaking at road junction",daysAgo:2,sev:"Medium",status:"Open"},
+    {type:"Overflow",lat:7.2350,lng:79.8600,desc:"Canal overflow after rain",daysAgo:18,sev:"High",status:"Resolved"},
+    {type:"Water Leak",lat:7.1700,lng:79.8150,desc:"Cracked main near school",daysAgo:21,sev:"High",status:"Resolved"},
+    {type:"Contamination",lat:7.2180,lng:79.8500,desc:"Discoloured water from standpipe",daysAgo:1,sev:"Critical",status:"Open"},
+    {type:"Water Leak",lat:7.0550,lng:79.8750,desc:"Leaking hydrant — road waterlogged",daysAgo:10,sev:"High",status:"Open"},
+    {type:"Overflow",lat:7.0558,lng:79.8758,desc:"Sewer overflow outside school",daysAgo:8,sev:"High",status:"Open"},
+    {type:"Illegal Dumping",lat:7.0542,lng:79.8742,desc:"Chemical drums dumped near canal",daysAgo:7,sev:"Critical",status:"Open"},
+    {type:"Pollution",lat:7.0565,lng:79.8765,desc:"Foam on canal surface",daysAgo:4,sev:"High",status:"Open"},
+    {type:"Water Leak",lat:7.0650,lng:79.8800,desc:"Water bubbling through pavement",daysAgo:1,sev:"Medium",status:"Open"},
+    {type:"Overflow",lat:7.0400,lng:79.8700,desc:"Culvert blocked, flooding yard",daysAgo:12,sev:"Medium",status:"Resolved"},
+    {type:"Dry Tap",lat:7.0750,lng:79.8850,desc:"No water for 3 days at this junction",daysAgo:6,sev:"Medium",status:"Resolved"},
+    {type:"Illegal Dumping",lat:6.9950,lng:79.8700,desc:"Oil dumped near storm drain",daysAgo:4,sev:"Critical",status:"Open"},
+    {type:"Pollution",lat:6.9900,lng:79.8650,desc:"Smell from open drain",daysAgo:8,sev:"Medium",status:"Open"},
+    {type:"Water Leak",lat:7.0050,lng:79.8750,desc:"Visible leak from main pipe",daysAgo:15,sev:"Medium",status:"Resolved"},
+    {type:"Overflow",lat:6.9850,lng:79.8600,desc:"Road flooding every rain",daysAgo:30,sev:"High",status:"Resolved"},
+    {type:"Water Leak",lat:6.9700,lng:79.8600,desc:"Burst pipe near Panchikawatte",daysAgo:3,sev:"High",status:"Open"},
+    {type:"Contamination",lat:6.9650,lng:79.8550,desc:"Discoloured water — possible contamination",daysAgo:5,sev:"Critical",status:"Open"},
+    {type:"Overflow",lat:6.9600,lng:79.8500,desc:"Drain blocked — water in road",daysAgo:9,sev:"Medium",status:"Open"},
+    {type:"Illegal Dumping",lat:6.9750,lng:79.8650,desc:"Tyres dumped near canal wall",daysAgo:7,sev:"Low",status:"Resolved"},
+    {type:"Dry Tap",lat:6.9680,lng:79.8580,desc:"Tap running continuously since Tuesday",daysAgo:16,sev:"Medium",status:"Resolved"},
+    {type:"Pollution",lat:6.9200,lng:79.8500,desc:"Dead fish in canal — possible discharge",daysAgo:2,sev:"Critical",status:"Open"},
+    {type:"Overflow",lat:6.9100,lng:79.8400,desc:"Overflowing septic near houses",daysAgo:11,sev:"High",status:"Open"},
+    {type:"Water Leak",lat:6.9300,lng:79.8550,desc:"Water running from meter constantly",daysAgo:6,sev:"Medium",status:"Resolved"},
+    {type:"Illegal Dumping",lat:6.9350,lng:79.8600,desc:"Industrial waste near storm drain",daysAgo:19,sev:"Critical",status:"Resolved"}
+  ];
+  try {
+    for(const s of SEED){
+      const ts=new Date(now-s.daysAgo*DAY);
+      const resolvedAt=s.status==="Resolved"?new Date(ts.getTime()+Math.random()*s.daysAgo*DAY*0.8):null;
+      const w=SEV_WEIGHT[s.sev]||1;
+      await addDoc(collection(db,"reports"),{
+        type:s.type,description:s.desc,lat:s.lat,lng:s.lng,
+        severity:s.sev,status:s.status,timestamp:ts,resolvedAt,
+        reporter:"Demo Data",urgencyScore:Math.min(w+Math.floor(Math.random()*3)*2,12),
+        photoURL:null
+      });
+    }
+    showToast("30 demo reports loaded!","success");
+  } catch(e) { showToast("Seed failed: "+e.message,"error"); }
+}
+
+document.getElementById("seed-btn-sidebar").addEventListener("click", seedData);
+
+/* ─── CSV EXPORT ─── */
+document.getElementById("export-csv-btn").addEventListener("click",()=>{
+  const headers=["ID","Type","Severity","Status","Description","Reporter","Urgency","Lat","Lng","Timestamp"];
+  const rows=allReports.map(r=>[
+    r.id,r.type,r.severity||"",r.status,
+    `"${(r.description||"").replace(/"/g,'""')}"`,
+    r.reporter||"Anonymous",r.urgencyScore||0,
+    r.lat?.toFixed(6)||"",r.lng?.toFixed(6)||"",
+    r.timestamp?.toDate?.()?.toISOString()||""
+  ]);
+  const csv=[headers,...rows].map(r=>r.join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=`leakmap-${new Date().toISOString().split("T")[0]}.csv`;a.click();URL.revokeObjectURL(url);
+  showToast(`Exported ${allReports.length} reports as CSV.`,"success");
+});
+
+/* ─── VIEW SWITCHING ─── */
+document.querySelectorAll(".nav-link[data-view]").forEach(btn=>btn.addEventListener("click",()=>switchView(btn.dataset.view)));
+document.querySelectorAll(".bnav-item[data-view]").forEach(btn=>btn.addEventListener("click",()=>switchView(btn.dataset.view)));
+document.getElementById("sidebar-critical-btn").addEventListener("click",()=>{switchView("reports");setTimeout(()=>{const el=document.getElementById("full-sev-filter");if(el){el.value="Critical";renderFullTable();}},50);});
+document.getElementById("sidebar-unresolved-btn").addEventListener("click",()=>{switchView("reports");setTimeout(()=>{const el=document.getElementById("full-status-filter");if(el){el.value="Open";renderFullTable();}},50);});
+
+function switchView(view) {
+  activeView=view;
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById(`view-${view}`)?.classList.add("active");
+  document.querySelectorAll(".nav-link[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  document.querySelectorAll(".bnav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  const titles={map:"Live Map",overview:"Overview Dashboard",reports:"All Reports",hotspots:"Hotspot Analysis",ecoscore:"Neighbourhood EcoScore"};
+  document.getElementById("topbar-title").textContent=titles[view]||view;
+  if(view==="map") setTimeout(()=>map.invalidateSize(),50);
+  if(view==="reports") renderFullTable();
+  if(view==="hotspots") renderHotspots();
+  if(view==="ecoscore") renderEcoScore();
+}
+
+/* ─── TABLE SORT ─── */
+document.querySelectorAll("#mini-reports-table th[data-sort]").forEach(th=>th.addEventListener("click",()=>{if(sortField===th.dataset.sort)sortDir=sortDir==="asc"?"desc":"asc";else{sortField=th.dataset.sort;sortDir="desc";}updateSortH("#mini-reports-table",sortField,sortDir);renderMiniTable();}));
+document.querySelectorAll("#full-reports-table th[data-sort]").forEach(th=>th.addEventListener("click",()=>{if(fullSortF===th.dataset.sort)fullSortD=fullSortD==="asc"?"desc":"asc";else{fullSortF=th.dataset.sort;fullSortD="desc";}updateSortH("#full-reports-table",fullSortF,fullSortD);renderFullTable();}));
+function updateSortH(sel,field,dir){document.querySelectorAll(`${sel} th`).forEach(th=>{th.classList.remove("sort-asc","sort-desc");if(th.dataset.sort===field)th.classList.add(dir==="asc"?"sort-asc":"sort-desc");});}
+
+/* ─── FILTER INPUTS ─── */
+["mini-search","mini-status-filter","mini-type-filter"].forEach(id=>document.getElementById(id)?.addEventListener("input",renderMiniTable));
+["full-search","full-status-filter","full-type-filter","full-sev-filter"].forEach(id=>document.getElementById(id)?.addEventListener("input",()=>{if(activeView==="reports")renderFullTable();}));
+
+/* ─── DATE RANGE ─── */
+document.getElementById("last-7-btn").addEventListener("click",()=>{const to=new Date(),from=new Date(to-7*86400000);document.getElementById("date-from").value=from.toISOString().split("T")[0];document.getElementById("date-to").value=to.toISOString().split("T")[0];renderFullTable();});
+document.getElementById("last-30-btn").addEventListener("click",()=>{const to=new Date(),from=new Date(to-30*86400000);document.getElementById("date-from").value=from.toISOString().split("T")[0];document.getElementById("date-to").value=to.toISOString().split("T")[0];renderFullTable();});
+document.getElementById("date-clear-btn").addEventListener("click",()=>{document.getElementById("date-from").value="";document.getElementById("date-to").value="";renderFullTable();});
+["date-from","date-to"].forEach(id=>document.getElementById(id)?.addEventListener("change",()=>{if(activeView==="reports")renderFullTable();}));
+
+/* ─── GLOBAL TOOLTIP ─── */
+const globalTip=document.getElementById("global-tip");
+document.addEventListener("mouseover",e=>{const t=e.target.closest("[data-tip]");if(!t)return;globalTip.textContent=t.dataset.tip;globalTip.style.display="block";});
+document.addEventListener("mousemove",e=>{if(globalTip.style.display==="block"){const x=e.clientX+14,y=e.clientY-10;globalTip.style.left=(x+globalTip.offsetWidth>window.innerWidth?x-globalTip.offsetWidth-24:x)+"px";globalTip.style.top=(y+globalTip.offsetHeight>window.innerHeight?y-globalTip.offsetHeight-4:y)+"px";}});
+document.addEventListener("mouseout",e=>{if(!e.relatedTarget?.closest("[data-tip]")){globalTip.style.display="none";}});
+
+/* ─── TOPBAR SUB ─── */
+function updateTopbarSub(){const el=document.getElementById("topbar-sub");if(!el)return;const open=allReports.filter(r=>r.status!=="Resolved").length;el.textContent=`${allReports.length} total reports · ${open} open · ${isConfigured?"Live":"Demo"} mode`;}
+
+/* ─── HELPERS ─── */
+function computeHotspotClusters(reports){
+  const visited=new Set(),clusters=[];
+  for(let i=0;i<reports.length;i++){
+    if(visited.has(i))continue;
+    const group=[i];visited.add(i);
+    for(let j=i+1;j<reports.length;j++){
+      if(visited.has(j))continue;
+      if(distMeters(reports[i].lat,reports[i].lng,reports[j].lat,reports[j].lng)<=500){group.push(j);visited.add(j);}
+    }
+    if(group.length>=3){
+      const members=group.map(idx=>reports[idx]);
+      clusters.push({count:members.length,center:{lat:members.reduce((s,r)=>s+r.lat,0)/members.length,lng:members.reduce((s,r)=>s+r.lng,0)/members.length},types:[...new Set(members.map(r=>r.type))]});
+    }
+  }
+  return clusters.sort((a,b)=>b.count-a.count);
+}
+
+function filterReports(reports,search,status,type,severity){
+  return reports.filter(r=>{
+    if(status!=="all"&&r.status!==status) return false;
+    if(type!=="all"&&r.type!==type) return false;
+    if(severity!=="all"&&r.severity!==severity) return false;
+    if(search){const blob=`${r.type} ${r.description} ${r.reporter} ${r.status}`.toLowerCase();if(!blob.includes(search))return false;}
+    return true;
+  });
+}
+
+function sortRows(reports,field,dir){
+  return [...reports].sort((a,b)=>{
+    let av=a[field],bv=b[field];
+    if(field==="timestamp"){av=a.timestamp?.seconds||0;bv=b.timestamp?.seconds||0;}
+    if(typeof av==="string"){av=av.toLowerCase();bv=bv.toLowerCase();}
+    if(av<bv)return dir==="asc"?-1:1; if(av>bv)return dir==="asc"?1:-1; return 0;
+  });
+}
+
+function calcWaterSaved(){return allReports.filter(r=>r.status==="Resolved").reduce((t,r)=>t+(WATER_SAVED_L[r.type]||500),0);}
+function fmtWater(l){if(l>=1e6)return`${(l/1e6).toFixed(1)} ML`;if(l>=1000)return`${(l/1000).toFixed(1)} kL`;return`${l.toLocaleString()} L`;}
+
+function distMeters(lat1,lng1,lat2,lng2){
+  const R=6371000,φ1=lat1*Math.PI/180,φ2=lat2*Math.PI/180;
+  const Δφ=(lat2-lat1)*Math.PI/180,Δλ=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function formatTimeAgo(date){
+  if(!date)return"—";const s=(Date.now()-date.getTime())/1000;
+  if(s<60)return"just now";if(s<3600)return`${Math.floor(s/60)}m ago`;
+  if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;
+  return date.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+}
+
+function esc(str){return String(str??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function lower(s){return s.toLowerCase();}
+function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function hideLoader(){setTimeout(()=>document.getElementById("loading-overlay")?.classList.add("hidden"),600);}
+
+function showToast(msg,type="info"){
+  const c=document.getElementById("toast-container");
+  const icons={success:"✅",error:"❌",info:"ℹ️",warning:"⚠️"};
+  const t=document.createElement("div");
+  t.className=`toast ${type}`;
+  t.innerHTML=`<span>${icons[type]||"ℹ️"}</span><span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>{t.classList.add("exiting");setTimeout(()=>t.remove(),300);},3500);
+}
+
+</script>
+</body>
+</html>
